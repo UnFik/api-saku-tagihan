@@ -3,13 +3,33 @@
   "version": "1.0.50",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "db:seed": "bun tsx src/db/seed.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:drop": "psql -U postgres -c 'DROP DATABASE test_db WITH (FORCE)' -c 'CREATE DATABASE test_db'"
   },
   "dependencies": {
-    "elysia": "latest"
+    "@elysiajs/cors": "^1.1.1",
+    "@elysiajs/jwt": "^1.1.1",
+    "@types/bcrypt": "^5.0.2",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.36.3",
+    "drizzle-typebox": "^0.1.1",
+    "elysia": "latest",
+    "flatted": "^3.3.2",
+    "pg": "^8.13.1",
+    "sql-log-prettifier": "^0.1.2"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "@types/bun": "^1.1.13",
+    "@types/pg": "^8.11.10",
+    "bun-types": "latest",
+    "drizzle-kit": "^0.28.1",
+    "tsx": "^4.19.2"
   },
   "module": "src/index.js"
 }
