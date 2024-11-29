@@ -2,9 +2,11 @@ import { Elysia, ValidationError } from "elysia";
 import cors from "@elysiajs/cors";
 import { unprocessable } from "./common/utils";
 import usersController from "@/api/users/users.controller";
-import billTypesController from "@/api/referensi/billType/billTypes.controller";
+// import billTypesController from "@/api/referensi/billType/billTypes.controller";
 import dispensationTypesController from "./api/referensi/dispensationType/dispensationTypes.controller";
 import uktBillsController from "./api/uktBills/uktBills.controller";
+import billIssuesController from "./api/referensi/billIssues/billIssues.controller";
+import billGroupsController from "./api/referensi/billGroup/billGroups.controller";
 
 const app = new Elysia({ prefix: "/api" })
   .use(cors())
@@ -32,7 +34,8 @@ const app = new Elysia({ prefix: "/api" })
     }
   })
   .use(usersController)
-  // .use(billTypesController)
+  .use(billIssuesController)
+  .use(billGroupsController)
   .use(dispensationTypesController)
   .use(uktBillsController)
   .get("/", () => "API SAKU TAGIHAN")

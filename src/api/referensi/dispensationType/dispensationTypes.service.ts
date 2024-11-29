@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { dispensationTypes } from "@/db/schema";
-import type { DispensationTypePayload } from "./dispensationTypes.schema";
-import { notFound, unprocessable } from "@/common/utils";
+import type { DispensationTypeBase, DispensationTypePayload } from "./dispensationTypes.schema";
+import { notFound } from "@/common/utils";
 
 export abstract class DispensationTypeService {
   static async getAll() {
@@ -31,15 +31,15 @@ export abstract class DispensationTypeService {
     return data;
   }
 
-  static async edit(id: number, payload: DispensationTypePayload) {
-    const [data] = await db
+  static async edit(id: number, data: Partial<DispensationTypeBase>) {
+    const [dispensationType] = await db
       .update(dispensationTypes)
-      .set(payload)
+      .set(data)
       .where(eq(dispensationTypes.id, id))
       .returning();
 
-    if (!data) throw notFound();
-    return data;
+    if (!dispensationType) throw notFound();
+    return dispensationType;
   }
 
   static async delete(id: number) {

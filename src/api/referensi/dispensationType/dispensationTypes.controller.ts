@@ -2,15 +2,19 @@ import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
 import { getAuthUserId, unauthorized } from "@/common/utils";
 import { DispensationTypeService } from "./dispensationTypes.service";
+import { dispensationTypeBase } from "./dispensationTypes.schema";
 
 const dispensationTypesController = new Elysia({
-  prefix: "/referensi/dispensationType",
+  prefix: "/referensi/dispensation-type",
 })
   .use(jwt)
   .guard(
     {
-      beforeHandle({ headers: { authorization, ...headers } }) {
-        if (!authorization || authorization.toString() === "") {
+      beforeHandle({
+        headers: { authorization, ...headers },
+        cookie: { authorization: cookieAuthorization },
+      }) {
+        if (!authorization && !cookieAuthorization.value) {
           throw unauthorized();
         }
       },
@@ -26,18 +30,11 @@ const dispensationTypesController = new Elysia({
           "",
           async ({ body, set }) => {
             const data = await DispensationTypeService.create(body);
-            if (!data) {
-              set.status = 400;
-              return {
-                success: false,
-                message: "ID Dispensation Type already exist",
-              };
-            }
             set.status = 201;
             return {
               data,
               success: true,
-              message: `Data successfully created`,
+              message: `Berhasil membuat data jenis dispensasi`,
             };
           },
           {
@@ -53,7 +50,11 @@ const dispensationTypesController = new Elysia({
           async ({ params: { id }, set }) => {
             const data = await DispensationTypeService.find(id);
             set.status = 200;
-            return { data, success: true, message: "Data retrieved" };
+            return {
+              data,
+              success: true,
+              message: "Berhasil membuat data jenis dispensasi",
+            };
           },
           { params: t.Object({ id: t.Number() }) }
         )
@@ -62,7 +63,11 @@ const dispensationTypesController = new Elysia({
           async ({ params: { id }, set }) => {
             const data = await DispensationTypeService.delete(id);
             set.status = 200;
-            return { data, success: true, message: "Data deleted" };
+            return {
+              data,
+              success: true,
+              message: "Berhasil menghapus data jenis dispensasi",
+            };
           },
           { params: t.Object({ id: t.Number() }) }
         )
@@ -71,11 +76,15 @@ const dispensationTypesController = new Elysia({
           async ({ params: { id }, body, set }) => {
             const data = await DispensationTypeService.edit(id, body);
             set.status = 200;
-            return { data, success: true, message: "Data updated" };
+            return {
+              data,
+              success: true,
+              message: "Berhasil memperbarui data jenis dispensasi",
+            };
           },
           {
             params: t.Object({ id: t.Number() }),
-            body: t.Object({ id: t.Number(), name: t.String(), description: t.String() }),
+            body: t.Partial(dispensationTypeBase),
           }
         )
   );

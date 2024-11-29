@@ -87,7 +87,7 @@ export const uktDispensations = pgTable("ukt_dispensations", {
 //   updateAt: timestamp("update_at").defaultNow().notNull(),
 // });
 
-export const dispensationTypes = pgTable("dispensationTypes", {
+export const dispensationTypes = pgTable("dispensation_types", {
   id: serial("id").primaryKey().notNull(),
 
   name: varchar("name", { length: 255 }).notNull(),

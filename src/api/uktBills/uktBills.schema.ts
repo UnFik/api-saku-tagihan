@@ -15,7 +15,6 @@ export const uktBillBase = t.Pick(uktBillInsert, [
   "nim",
   "amount",
   "status",
-  "filename",
   "description",
   "uktCategory",
   "dueDate",
@@ -26,7 +25,7 @@ export const uktBillBase = t.Pick(uktBillInsert, [
 ]);
 export type UktBillBase = Static<typeof uktBillBase>;
 
-export const uktBillPayload = t.Intersect([uktBillBase]);
+export const uktBillPayload = uktBillBase;
 export type UktBillPayload = Static<typeof uktBillPayload>;
 
 export const uktBillQuery = t.Object({

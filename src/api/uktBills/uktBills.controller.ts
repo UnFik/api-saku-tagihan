@@ -1,7 +1,12 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
-import { getAuthUserId, unauthorized } from "@/common/utils";
+import {
+  generateTokenMultibank,
+  getAuthUserId,
+  unauthorized,
+} from "@/common/utils";
 import { UktBillService } from "./uktBills.service";
+import { uktBillBase } from "./uktBills.schema";
 
 const uktBillsController = new Elysia({
   prefix: "/tagihan-ukt",
@@ -9,8 +14,11 @@ const uktBillsController = new Elysia({
   .use(jwt)
   .guard(
     {
-      beforeHandle({ headers: { authorization, ...headers } }) {
-        if (!authorization || authorization.toString() === "") {
+      beforeHandle({
+        headers: { authorization, ...headers },
+        cookie: { authorization: cookieAuthorization },
+      }) {
+        if (!authorization && !cookieAuthorization.value) {
           throw unauthorized();
         }
       },
@@ -24,8 +32,8 @@ const uktBillsController = new Elysia({
         })
         .post(
           "",
-          async ({ body, set }) => {
-            const data = await UktBillService.create(body);
+          async ({ body, set, cookie: { multibank } }) => {
+            const data = await UktBillService.create(body, multibank.value);
             set.status = 201;
             return {
               data,
@@ -82,29 +90,7 @@ const uktBillsController = new Elysia({
           },
           {
             params: t.Object({ id: t.Number() }),
-            body: t.Object({
-              status: t.Enum({
-                BARU: "BARU",
-                DIPROSES: "DIPROSES",
-                TERVERIFIKASI: "TERVERIFIKASI",
-              }),
-              semester: t.String(),
-              amount: t.Number(),
-              nim: t.String(),
-              name: t.String(),
-              description: t.String(),
-              flagStatus: t.Union([
-                t.Literal("88"),
-                t.Literal("01"),
-                t.Literal("02"),
-              ]),
-              uktCategory: t.String(),
-              billNumber: t.String(),
-              dueDate: t.String(),
-              filename: t.String(),
-              majorId: t.String(),
-              billIssueId: t.String(),
-            }),
+            body: t.Partial(uktBillBase),
           }
         )
   );

@@ -11,20 +11,16 @@ export type DispensationTypeInsert = Static<typeof dispensationTypeInsert>;
 export type DispensationType = Static<typeof dispensationTypeSelect>;
 
 // Buat schema dasar untuk dispensationType
-export const dispensationTypeBase = t.Pick(dispensationTypeInsert, [
-  "name",
-  "description",
-  "id",
-]);
+export const dispensationTypeBase = t.Object({
+  id: t.Number(),
+  name: t.String(),
+  description: t.String(),
+});
+
 export type DispensationTypeBase = Static<typeof dispensationTypeBase>;
 
 // Buat payload schema
-export const dispensationTypePayload = t.Intersect([
-  dispensationTypeBase,
-  t.Object({
-    id: t.Optional(t.Array(t.String())),
-  }),
-]);
+export const dispensationTypePayload = dispensationTypeBase;
 export type DispensationTypePayload = Static<typeof dispensationTypePayload>;
 
 // Buat query schema untuk pencarian dan pagination

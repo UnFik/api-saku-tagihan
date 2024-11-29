@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { uktBills } from "@/db/schema";
-import type { UktBillPayload } from "./uktBills.schema";
+import type { UktBillBase, UktBillPayload } from "./uktBills.schema";
 import { notFound } from "@/common/utils";
+import { getBillIssueById, getProdiById } from "@/common/getter";
 
 export abstract class UktBillService {
   static async getAll() {
@@ -17,24 +18,38 @@ export abstract class UktBillService {
     });
 
     if (!data) throw notFound();
-    return data;
+
+    const prodi = await getProdiById(data.majorId);
+    const billIssue = await getBillIssueById(data.billIssueId);
+    
+    return { ...data, prodi: { ...prodi }, billIssue: { ...billIssue } };
   }
 
-  static async create(payload: UktBillPayload) {
+  static async create(payload: UktBillPayload, multibankToken?: string) {
     const [data] = await db.insert(uktBills).values(payload).returning();
 
+    const prodi = await getProdiById(data.majorId);
+    if (!prodi) {
+      throw notFound("kode prodi tidak valid");
+    }
+
+    const billIssue = await getBillIssueById(data.billIssueId, multibankToken);
+    if (!billIssue) {
+      throw notFound("kode bill issue tidak valid");
+    }
+
     return data;
   }
 
-  static async edit(id: number, payload: UktBillPayload) {
-    const [data] = await db
+  static async edit(id: number, data: Partial<UktBillBase>) {
+    const [uktBill] = await db
       .update(uktBills)
-      .set(payload)
+      .set(data)
       .where(eq(uktBills.id, id))
       .returning();
 
-    if (!data) throw notFound();
-    return this.find(data.id);
+    if (!uktBill) throw notFound("UktBill not found");
+    return data;
   }
 
   static async delete(id: number) {
