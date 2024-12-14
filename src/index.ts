@@ -1,16 +1,19 @@
+import "./common/instrument";
 import { Elysia, ValidationError } from "elysia";
 import cors from "@elysiajs/cors";
-import { unprocessable } from "./common/utils";
+import { generateTokenMultibank, unprocessable } from "./common/utils";
 import usersController from "@/api/users/users.controller";
 // import billTypesController from "@/api/referensi/billType/billTypes.controller";
 import dispensationTypesController from "./api/referensi/dispensationType/dispensationTypes.controller";
 import uktBillsController from "./api/uktBills/uktBills.controller";
 import billIssuesController from "./api/referensi/billIssues/billIssues.controller";
 import billGroupsController from "./api/referensi/billGroup/billGroups.controller";
+import { swagger } from "@elysiajs/swagger";
 
 const app = new Elysia({ prefix: "/api" })
+  .use(swagger())
   .use(cors())
-  .onError(({ set, error }) => {
+  .onError(({ set, error, code }) => {
     set.headers["content-type"] = "application/json";
     if (error instanceof ValidationError) {
       /* attempting to return detailed error response while maintaing realworld api error response structure
@@ -38,8 +41,15 @@ const app = new Elysia({ prefix: "/api" })
   .use(billGroupsController)
   .use(dispensationTypesController)
   .use(uktBillsController)
+  .get("/refresh-token", async ({ cookie: { multibank } }) => {
+    const token = await generateTokenMultibank();
+
+    multibank.value = token;
+
+    return { token };
+  })
   .get("/", () => "API SAKU TAGIHAN")
-  .listen(3000);
+  .listen(process.env.PORT ?? 3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
