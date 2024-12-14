@@ -4,6 +4,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts",
+    "start": "./server",
     "build": "bun build   --compile       --minify-whitespace     --minify-syntax      --target bun    --outfile server        ./src/index.ts",
     "db:seed": "bun tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
@@ -15,6 +16,8 @@
   "dependencies": {
     "@elysiajs/cors": "^1.1.1",
     "@elysiajs/jwt": "^1.1.1",
+    "@elysiajs/swagger": "^1.1.6",
+    "@sentry/bun": "^8.43.0",
     "@types/bcrypt": "^5.0.2",
     "aws-sdk": "^2.1692.0",
     "bcrypt": "^5.1.1",
