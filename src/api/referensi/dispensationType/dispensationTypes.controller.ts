@@ -38,11 +38,7 @@ const dispensationTypesController = new Elysia({
             };
           },
           {
-            body: t.Object({
-              id: t.Number(),
-              name: t.String(),
-              description: t.String(),
-            }),
+            body: dispensationTypeBase,
           }
         )
         .get(

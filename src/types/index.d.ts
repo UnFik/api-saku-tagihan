@@ -1,6 +1,6 @@
-export interface UserSiakad {
-    status: boolean;
-    msg: string;
-    // tambahkan properti lain yang diperlukan
+interface ResponseService {
+    status: number;
+    success: boolean;
+    data?: any;
+    message: string;
 }
-  

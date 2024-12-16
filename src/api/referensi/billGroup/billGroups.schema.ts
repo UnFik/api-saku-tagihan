@@ -20,8 +20,7 @@ export type BillGroups = Static<typeof billGroupsSelect>;
 export const billGroupsBase = t.Pick(billGroupsInsert, ["name", "description", "detail"]);
 export type BillGroupsBase = Static<typeof billGroupsBase>;
 
-export const billGroupsPayload = t.Intersect([billGroupsBase]);
-
+export const billGroupsPayload = t.Partial(billGroupsBase);
 export type BillGroupsPayload = Static<typeof billGroupsPayload>;
 
 export const billGroupsQuery = t.Object({

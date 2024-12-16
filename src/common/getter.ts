@@ -41,11 +41,9 @@ export async function getBillIssueById(id: string, token?: string) {
   })
     .then(async (response) => {
       if (response.status == 401) {
-        // console.log(response);
         const token = await fetch(`${env.BASE_URL}/api/refresh-token`).then(
           (res) => res.json()
         );
-        console.log(token);
         getBillIssueById(id, token);
       }
       return response.json();

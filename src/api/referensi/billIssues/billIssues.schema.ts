@@ -11,7 +11,7 @@ import { t, type Static } from "elysia";
 export const billIssueBase = t.Object({
   bill_group_id: t.String(),
   description: t.String(),
-  semester: t.String(),
+  semester: t.Integer(),
   start_date: t.String(),
   end_date: t.String(),
 });
@@ -25,6 +25,10 @@ export const billIssuePayload = t.Pick(billIssueBase, [
   "end_date",
 ]);
 export type BillIssuePayload = Static<typeof billIssuePayload>;
+
+export const billIssueUpdatePayload = t.Partial(billIssuePayload);
+
+export type BillIssueUpdatePayload = Static<typeof billIssueUpdatePayload>;
 
 export const billIssueQuery = t.Object({
   name: t.Optional(t.String({ minLength: 1 })),

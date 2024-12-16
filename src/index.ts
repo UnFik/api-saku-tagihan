@@ -1,4 +1,4 @@
-import "./common/instrument";
+// import "./common/instrument";
 import { Elysia, ValidationError } from "elysia";
 import cors from "@elysiajs/cors";
 import { generateTokenMultibank, unprocessable } from "./common/utils";
@@ -11,9 +11,28 @@ import billGroupsController from "./api/referensi/billGroup/billGroups.controlle
 import { swagger } from "@elysiajs/swagger";
 
 const app = new Elysia({ prefix: "/api" })
-  .use(swagger())
-  .use(cors())
-  .onError(({ set, error, code }) => {
+  .use(
+    cors({
+      origin: "*",
+      allowedHeaders: "*",
+      methods: ["GET", "POST", "PUT", "DELETE"],
+      credentials: true,
+    })
+  )
+  .use(
+    swagger({
+      documentation: {
+        info: {
+          title: "SAKU TAGIHAN",
+          description: "API SAKU TAGIHAN Documentation",
+          version: "1.0.0",
+        },
+        tags: [{ name: "App", description: "General endpoints" }],
+      },
+      path: "/docs",
+    })
+  )
+  .onError(({ set, error, code }: { set: any; error: any; code: any }) => {
     set.headers["content-type"] = "application/json";
     if (error instanceof ValidationError) {
       /* attempting to return detailed error response while maintaing realworld api error response structure
@@ -44,12 +63,20 @@ const app = new Elysia({ prefix: "/api" })
   .get("/refresh-token", async ({ cookie: { multibank } }) => {
     const token = await generateTokenMultibank();
 
-    multibank.value = token;
+    // Set cookie dengan konfigurasi yang lebih aman
+    multibank.set({
+      httpOnly: true,
+      maxAge: 60 * 60, // 1 jam
+      value: token,
+      sameSite: "none",
+      secure: true,
+      path: "/",
+    });
 
     return { token };
   })
   .get("/", () => "API SAKU TAGIHAN")
-  .listen(process.env.PORT ?? 3000);
+  .listen(3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

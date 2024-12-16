@@ -1,11 +1,8 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
-import {
-  generateTokenMultibank,
-  getAuthUserId,
-  unauthorized,
-} from "@/common/utils";
+import { getAuthUserId, unauthorized } from "@/common/utils";
 import { BillIssueService } from "./billIssues.service";
+import { billIssueBase, billIssueUpdatePayload } from "./billIssues.schema";
 
 const billIssuesController = new Elysia({
   prefix: "/referensi/bill-issue",
@@ -35,20 +32,10 @@ const billIssuesController = new Elysia({
           async ({ body, set }) => {
             const data = await BillIssueService.create(body);
             set.status = 201;
-            return {
-              data,
-              success: true,
-              message: `Berhasil membuat data bill issue`,
-            };
+            return data;
           },
           {
-            body: t.Object({
-              bill_group_id: t.String(),
-              semester: t.String(),
-              description: t.String(),
-              start_date: t.String(),
-              end_date: t.String(),
-            }),
+            body: billIssueBase,
           }
         )
         .get(
@@ -64,8 +51,12 @@ const billIssuesController = new Elysia({
           "/:id",
           async ({ params: { id }, set, cookie: { multibank } }) => {
             const data = await BillIssueService.delete(id, multibank.value);
+            if (!data.success) {
+              set.status = data.status;
+              return data;
+            }
             set.status = 200;
-            return { data, success: true, message: "Data deleted" };
+            return data;
           },
           { params: t.Object({ id: t.Number() }) }
         )
@@ -73,17 +64,16 @@ const billIssuesController = new Elysia({
           "/:id",
           async ({ params: { id }, body, set, cookie: { multibank } }) => {
             const data = await BillIssueService.edit(id, body, multibank.value);
+            if (!data.success) {
+              set.status = data.status;
+              return data;
+            }
             set.status = 200;
-            return { data, success: true, message: "Data updated" };
+            return data;
           },
           {
             params: t.Object({ id: t.Number() }),
-            body: t.Object({
-              id: t.String(),
-              name: t.String(),
-              description: t.String(),
-              billTypeId: t.Number(),
-            }),
+            body: billIssueUpdatePayload,
           }
         )
   );

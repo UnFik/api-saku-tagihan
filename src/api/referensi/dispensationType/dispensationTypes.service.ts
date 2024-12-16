@@ -1,8 +1,11 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { dispensationTypes } from "@/db/schema";
-import type { DispensationTypeBase, DispensationTypePayload } from "./dispensationTypes.schema";
-import { notFound } from "@/common/utils";
+import type {
+  DispensationTypeBase,
+  DispensationTypePayload,
+} from "./dispensationTypes.schema";
+import { notFound, invalid, unprocessable } from "@/common/utils";
 
 export abstract class DispensationTypeService {
   static async getAll() {
@@ -14,21 +17,32 @@ export abstract class DispensationTypeService {
       where: eq(dispensationTypes.id, id),
     });
 
-    if (!data) throw notFound();
+    if (!data)
+      return {
+        success: false,
+        status: 404,
+      };
     return data;
   }
 
   static async create(payload: DispensationTypePayload) {
-    const existing = await db.query.dispensationTypes.findFirst({
-      where: eq(dispensationTypes.name, payload.name)
-    })
+    try {
+      const isExist = await db.query.dispensationTypes.findFirst({
+        where: eq(dispensationTypes.id, payload.id),
+      });
 
-    if (existing) {
-      return undefined; 
+      if (isExist) {
+        throw invalid(`ID ${payload.id} sudah digunakan`);
+      }
+
+      const [data] = await db
+        .insert(dispensationTypes)
+        .values(payload)
+        .returning();
+      return data;
+    } catch (error) {
+      throw unprocessable(error);
     }
-
-    const [data] = await db.insert(dispensationTypes).values(payload).returning();
-    return data;
   }
 
   static async edit(id: number, data: Partial<DispensationTypeBase>) {

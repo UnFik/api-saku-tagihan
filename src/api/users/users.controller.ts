@@ -12,10 +12,10 @@ import { formattedUser } from "./users.utils";
 
 const usersController = new Elysia()
   .use(jwt)
-  .onRequest(async ({ set }) => {
-    const tokenMultibank = await generateTokenMultibank();
-    set.headers["multibank-token"] = tokenMultibank;
-  })
+  // .onRequest(async ({ set }) => {
+  //   const tokenMultibank = await generateTokenMultibank();
+  //   set.headers["multibank-token"] = tokenMultibank;
+  // })
   .post(
     "login",
     async ({ body, jwt, set, cookie: { authorization, multibank } }) => {
@@ -45,13 +45,5 @@ const usersController = new Elysia()
     {
       body: t.Object({ username: t.String(), password: t.String() }),
     }
-  )
-  .get("refresh-token", async ({ set, cookie: { multibank } }) => {
-    const token = await generateTokenMultibank();
-    
-    multibank.value = token;
-
-    return { token };
-  });
-
+  );
 export default usersController;

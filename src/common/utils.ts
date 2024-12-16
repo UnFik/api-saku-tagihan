@@ -23,6 +23,12 @@ export async function getAuthUserId({
   return { userId: payload.id.toString(), token };
 }
 
+export function invalid(cause?: any) {
+  return error(400, {
+    errors: { body: [cause ? `${cause}` : "Bad Request"] },
+  });
+}
+
 export function unauthorized(cause?: any) {
   return error(401, {
     errors: { body: [cause ? `${cause.message}` : "Invalid credentials"] },
@@ -86,6 +92,7 @@ export async function generateTokenMultibank() {
     });
 
     const result = await response.json();
+    console.log("token refreshed", result);
     if (result.status !== 200) {
       throw new Error(`Error: ${result.message}`);
     }
@@ -97,12 +104,19 @@ export async function generateTokenMultibank() {
 }
 
 export const refreshTokenMultibank = async () => {
-  const res = await fetch(`${env.BASE_URL}/api/refresh-token`);
+  const res = await fetch(`${env.BASE_URL}/api/refresh-token`, {
+    credentials: 'include'
+  });
 
   if (!res.ok) {
-    throw new Error(`Failed to refresh token: ${res.status}`);
+    unprocessable(`Failed to refresh token: ${res.status}`);
   }
 
   const data = await res.json();
+  
+  if (typeof window !== 'undefined') {
+    document.cookie = `multibank=${data.token}; path=/; secure; samesite=strict`;
+  }
+  
   return data.token;
 };

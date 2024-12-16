@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 // import { billIssues } from "@/db/schema";
-import type { BillIssuePayload } from "./billIssues.schema";
+import type {
+  BillIssuePayload,
+  BillIssueUpdatePayload,
+} from "./billIssues.schema";
 import { notFound, unprocessable } from "@/common/utils";
 import { env } from "bun";
 import { refreshTokenMultibank } from "@/common/utils";
@@ -20,8 +23,6 @@ export abstract class BillIssueService {
           Authorization: `Bearer ${token}`,
         },
       });
-
-      console.log(res.status);
 
       if (res.status == 401 || !res.ok) {
         const new_token = await refreshTokenMultibank();
@@ -67,7 +68,7 @@ export abstract class BillIssueService {
   static async create(
     payload: BillIssuePayload,
     token?: string
-  ): Promise<void> {
+  ): Promise<ResponseService> {
     if (!token) {
       token = await refreshTokenMultibank();
     }
@@ -81,14 +82,14 @@ export abstract class BillIssueService {
         },
         body: JSON.stringify(payload),
       });
-
+      console.log(res);
       if (res.status == 401 || !res.ok) {
         const new_token = await refreshTokenMultibank();
         return this.create(payload, new_token);
       }
 
       const data = await res.json();
-      return this.find(data.id);
+      return data;
     } catch (error) {
       console.error("Error creating bill issue:", error);
       throw unprocessable(error);
@@ -97,9 +98,9 @@ export abstract class BillIssueService {
 
   static async edit(
     id: number,
-    payload: Partial<BillIssuePayload>,
+    payload: BillIssueUpdatePayload,
     token?: string
-  ): Promise<void> {
+  ): Promise<ResponseService> {
     if (!token) {
       token = await refreshTokenMultibank();
     }
@@ -114,21 +115,25 @@ export abstract class BillIssueService {
         body: JSON.stringify(payload),
       });
 
+      if (res.status == 404) {
+        const data = await res.json();
+        return data;
+      }
+
       if (res.status == 401 || !res.ok) {
         const new_token = await refreshTokenMultibank();
         return this.edit(id, payload, new_token);
       }
 
       const data = await res.json();
-      if (!data) throw notFound();
-      return this.find(data.id);
+      return data;
     } catch (error) {
       console.error("Error editing bill issue:", error);
       throw unprocessable(error);
     }
   }
 
-  static async delete(id: number, token?: string): Promise<void> {
+  static async delete(id: number, token?: string): Promise<ResponseService> {
     if (!token) {
       token = await refreshTokenMultibank();
     }
@@ -140,6 +145,14 @@ export abstract class BillIssueService {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (res.status == 404) {
+        return {
+          status: 404,
+          success: false,
+          message: `Data bill issue dengan id ${id} tidak ditemukan`,
+        };
+      }
 
       if (res.status == 401 || !res.ok) {
         const new_token = await refreshTokenMultibank();
