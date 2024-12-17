@@ -11,7 +11,7 @@ const dispensationTypesController = new Elysia({
   .guard(
     {
       beforeHandle({
-        headers: { authorization, ...headers },
+        headers: { authorization },
         cookie: { authorization: cookieAuthorization },
       }) {
         if (!authorization && !cookieAuthorization.value) {
@@ -24,7 +24,11 @@ const dispensationTypesController = new Elysia({
         .resolve(getAuthUserId)
         .get("", async () => {
           const data = await DispensationTypeService.getAll();
-          return { data, success: true, message: "Data retrieved" };
+          return {
+            data,
+            success: true,
+            message: "Berhasil mendapatkan data semua jenis dispensasi",
+          };
         })
         .post(
           "",
@@ -32,9 +36,9 @@ const dispensationTypesController = new Elysia({
             const data = await DispensationTypeService.create(body);
             set.status = 201;
             return {
-              data,
               success: true,
               message: `Berhasil membuat data jenis dispensasi`,
+              data,
             };
           },
           {
@@ -47,9 +51,9 @@ const dispensationTypesController = new Elysia({
             const data = await DispensationTypeService.find(id);
             set.status = 200;
             return {
-              data,
               success: true,
               message: "Berhasil membuat data jenis dispensasi",
+              data,
             };
           },
           { params: t.Object({ id: t.Number() }) }
@@ -60,9 +64,9 @@ const dispensationTypesController = new Elysia({
             const data = await DispensationTypeService.delete(id);
             set.status = 200;
             return {
-              data,
               success: true,
               message: "Berhasil menghapus data jenis dispensasi",
+              data,
             };
           },
           { params: t.Object({ id: t.Number() }) }
@@ -73,9 +77,9 @@ const dispensationTypesController = new Elysia({
             const data = await DispensationTypeService.edit(id, body);
             set.status = 200;
             return {
-              data,
               success: true,
               message: "Berhasil memperbarui data jenis dispensasi",
+              data,
             };
           },
           {

@@ -11,10 +11,13 @@ const billGroupsController = new Elysia({
   .guard(
     {
       beforeHandle({
-        headers: { authorization, ...headers },
-        cookie: { authorization: cookieAuthorization },
+        headers: { authorization, multibank },
+        cookie: {
+          authorization: cookieAuthorization,
+          multibank: tokenMultibank,
+        },
       }) {
-        if (!authorization && !cookieAuthorization.value) {
+        if ((!authorization && !cookieAuthorization.value) || !multibank) {
           throw unauthorized();
         }
       },
@@ -22,11 +25,12 @@ const billGroupsController = new Elysia({
     (app) =>
       app
         .resolve(getAuthUserId)
-
         .get(
           "",
-          async ({ cookie: { multibank } }) => {
-            const data = await BillGroupService.getAll(multibank.value);
+          async ({ headers, cookie: { multibank } }) => {
+            const data = await BillGroupService.getAll(
+              multibank.value || headers.multibank
+            );
             return data;
           },
           {
@@ -72,8 +76,11 @@ const billGroupsController = new Elysia({
         )
         .post(
           "",
-          async ({ body, set, cookie: { multibank } }) => {
-            const data = await BillGroupService.create(body, multibank.value);
+          async ({ headers, body, set, cookie: { multibank } }) => {
+            const data = await BillGroupService.create(
+              body,
+              multibank.value || headers.multibank
+            );
             set.status = 201;
             return data;
           },
@@ -83,8 +90,11 @@ const billGroupsController = new Elysia({
         )
         .get(
           "/:id",
-          async ({ params: { id }, set, cookie: { multibank } }) => {
-            const data = await BillGroupService.find(id, multibank.value);
+          async ({ headers, params: { id }, set, cookie: { multibank } }) => {
+            const data = await BillGroupService.find(
+              id,
+              multibank.value || headers.multibank
+            );
             if (!data.success) {
               set.status = data.status;
               return data;
@@ -96,8 +106,11 @@ const billGroupsController = new Elysia({
         )
         .delete(
           "/:id",
-          async ({ params: { id }, set, cookie: { multibank } }) => {
-            const data = await BillGroupService.delete(id, multibank.value);
+          async ({ headers, params: { id }, set, cookie: { multibank } }) => {
+            const data = await BillGroupService.delete(
+              id,
+              multibank.value || headers.multibank
+            );
             if (!data.success) {
               set.status = data.status;
               return data;
@@ -109,8 +122,18 @@ const billGroupsController = new Elysia({
         )
         .put(
           "/:id",
-          async ({ params: { id }, body, set, cookie: { multibank } }) => {
-            const data = await BillGroupService.edit(id, body, multibank.value);
+          async ({
+            params: { id },
+            body,
+            headers,
+            set,
+            cookie: { multibank },
+          }) => {
+            const data = await BillGroupService.edit(
+              id,
+              body,
+              multibank.value || headers.multibank
+            );
             if (!data.success) {
               set.status = data.status;
               return data;
