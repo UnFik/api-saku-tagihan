@@ -82,7 +82,7 @@ export abstract class BillIssueService {
         },
         body: JSON.stringify(payload),
       });
-      console.log(res);
+
       if (res.status == 401 || !res.ok) {
         const new_token = await refreshTokenMultibank();
         return this.create(payload, new_token);

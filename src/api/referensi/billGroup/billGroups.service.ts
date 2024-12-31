@@ -119,7 +119,6 @@ export abstract class BillGroupService {
 
       if (res.status == 404) {
         const data = await res.json();
-        console.log(data);
         return data;
       }
 

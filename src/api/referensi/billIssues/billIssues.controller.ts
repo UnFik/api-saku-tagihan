@@ -14,7 +14,7 @@ const billIssuesController = new Elysia({
         headers: { authorization, multibank },
         cookie: { authorization: cookieAuthorization },
       }) {
-        if (!authorization && !cookieAuthorization.value || multibank) {
+        if (!authorization && !cookieAuthorization.value || !multibank) {
           throw unauthorized();
         }
       },
