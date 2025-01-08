@@ -1,12 +1,8 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
-import {
-  generateTokenMultibank,
-  getAuthUserId,
-  unauthorized,
-} from "@/common/utils";
+import { getAuthUserId, unauthorized } from "@/common/utils";
 import { UktBillService } from "./uktBills.service";
-import { uktBillBase } from "./uktBills.schema";
+import { uktBillInsert, uktBillQuery } from "./uktBills.schema";
 
 const uktBillsController = new Elysia({
   prefix: "/tagihan-ukt",
@@ -18,7 +14,7 @@ const uktBillsController = new Elysia({
         headers: { authorization, ...headers },
         cookie: { authorization: cookieAuthorization },
       }) {
-        if (!authorization && !cookieAuthorization.value) {
+        if (!authorization && !cookieAuthorization.value && headers.multibank) {
           throw unauthorized();
         }
       },
@@ -26,71 +22,99 @@ const uktBillsController = new Elysia({
     (app) =>
       app
         .resolve(getAuthUserId)
-        .get("", async () => {
-          const data = await UktBillService.getAll();
-          return { data, success: true, message: "Data retrieved" };
-        })
-        .post(
+        .get(
           "",
-          async ({ body, set, cookie: { multibank } }) => {
-            const data = await UktBillService.create(body, multibank.value);
-            set.status = 201;
-            return {
-              data,
-              success: true,
-              message: `Data successfully created`,
-            };
+          async ({ query, cookie: { multibank }, headers }) => {
+            const data = await UktBillService.getAll(
+              query,
+              multibank.value || headers.multibank
+            );
+            return data;
           },
           {
-            body: t.Object({
-              semester: t.String(),
-              nim: t.String(),
-              name: t.String(),
-              description: t.String(),
-              billNumber: t.String(),
-              amount: t.Number(),
-              uktCategory: t.String(),
-              filename: t.String(),
-              dueDate: t.String(),
-              flagStatus: t.Union([
-                t.Literal("88"),
-                t.Literal("01"),
-                t.Literal("02"),
-              ]),
-
-              majorId: t.String(),
-              billIssueId: t.String(),
-            }),
+            query: t.Partial(uktBillQuery),
+          }
+        )
+        .post(
+          "",
+          async ({ body, set, cookie: { multibank }, headers }) => {
+            const data = await UktBillService.create(
+              body,
+              multibank.value ?? headers.multibank
+            );
+            set.status = 201;
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
+          },
+          {
+            body: uktBillInsert,
           }
         )
         .get(
-          "/:id",
-          async ({ params: { id }, set }) => {
-            const data = await UktBillService.find(id);
+          "/:billNumber",
+          async ({
+            params: { billNumber },
+            set,
+            cookie: { multibank },
+            headers,
+          }) => {
+            const data = await UktBillService.find(
+              billNumber,
+              multibank.value ?? headers.multibank
+            );
             set.status = 200;
-            return { data, success: true, message: "Data retrieved" };
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
           },
-          { params: t.Object({ id: t.Number() }) }
+          { params: t.Object({ billNumber: t.Number() }) }
         )
         .delete(
-          "/:id",
-          async ({ params: { id }, set }) => {
-            const data = await UktBillService.delete(id);
+          "/:billNumber",
+          async ({
+            params: { billNumber },
+            set,
+            cookie: { multibank },
+            headers,
+          }) => {
+            const data = await UktBillService.delete(
+              billNumber,
+              multibank.value ?? headers.multibank
+            );
             set.status = 200;
-            return { data, success: true, message: "Data deleted" };
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
           },
-          { params: t.Object({ id: t.Number() }) }
+          { params: t.Object({ billNumber: t.Number() }) }
         )
         .put(
-          "/:id",
-          async ({ params: { id }, body, set }) => {
-            const data = await UktBillService.edit(id, body);
+          "/:billNumber",
+          async ({
+            params: { billNumber },
+            body,
+            set,
+            cookie: { multibank },
+            headers,
+          }) => {
+            const data = await UktBillService.edit(
+              billNumber,
+              body,
+              multibank.value ?? headers.multibank
+            );
             set.status = 200;
-            return { data, success: true, message: "Data updated" };
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
           },
           {
-            params: t.Object({ id: t.Number() }),
-            body: t.Partial(uktBillBase),
+            params: t.Object({ billNumber: t.Number() }),
+            body: t.Partial(uktBillInsert),
           }
         )
   );

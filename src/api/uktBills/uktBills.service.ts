@@ -1,64 +1,159 @@
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { uktBills } from "@/db/schema";
-import type { UktBillBase, UktBillPayload } from "./uktBills.schema";
-import { notFound } from "@/common/utils";
-import { getBillIssueById, getProdiById } from "@/common/getter";
+import type {
+  UktBillInsert,
+  UktBillQuery,
+} from "./uktBills.schema";
+import {
+  generateTokenMultibank,
+  unprocessable,
+} from "@/common/utils";
+import { env } from "bun";
 
 export abstract class UktBillService {
-  static async getAll() {
-    const data = await db.select().from(uktBills);
+  static async getAll(query: UktBillQuery, token?: string) {
+    if (!token) {
+      token = await generateTokenMultibank();
+    }
+    const { semester = "", bill_issue = "", per_page = "", prodi = "" } = query;
 
-    return data;
+    try {
+      const data = await fetch(
+        `${env.MULTIBANK_API_URL}/tagihan?semester=${semester}&bill_issue=${bill_issue}&per_page=${per_page}&prodi=${prodi}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      return data.json();
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw unprocessable(error);
+    }
   }
 
-  static async find(id: number) {
-    const data = await db.query.uktBills.findFirst({
-      where: eq(uktBills.id, id),
-    });
-
-    if (!data) throw notFound();
-
-    const prodi = await getProdiById(data.majorId);
-    const billIssue = await getBillIssueById(data.billIssueId);
-    
-    return { ...data, prodi: { ...prodi }, billIssue: { ...billIssue } };
-  }
-
-  static async create(payload: UktBillPayload, multibankToken?: string) {
-    const [data] = await db.insert(uktBills).values(payload).returning();
-
-    const prodi = await getProdiById(data.majorId);
-    if (!prodi) {
-      throw notFound("kode prodi tidak valid");
+  static async find(id: number, token?: string) {
+    if (!token) {
+      token = await generateTokenMultibank();
     }
 
-    const billIssue = await getBillIssueById(data.billIssueId, multibankToken);
-    if (!billIssue) {
-      throw notFound("kode bill issue tidak valid");
+    try {
+      const data = await fetch(`${env.MULTIBANK_API_URL}/tagihan/${id}`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return data.json();
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw unprocessable(error);
+    }
+  }
+
+  static async create(payload: UktBillInsert, multibankToken?: string) {
+    if (!multibankToken) {
+      multibankToken = await generateTokenMultibank();
     }
 
-    return data;
+    try {
+      const res = await fetch(`${env.MULTIBANK_API_URL}/tagihan`, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${multibankToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...payload, filename: undefined }),
+      });
+
+      if (res.status !== 200) {
+        return res.json()
+      }
+
+      console.log(res)
+      const data = await res.json();
+      console.log(data)
+
+      const upload = await db
+        .insert(uktBills)
+        .values({ id: data.bill_number, filename: payload.filename })
+        .returning()
+        .then((res) => res[0]);
+
+      if (!upload) {
+        return {
+          success: false,
+          status: 404,
+          message: "Gagal Mengupload File",
+        };
+      }
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw unprocessable(error);
+    }
   }
 
-  static async edit(id: number, data: Partial<UktBillBase>) {
-    const [uktBill] = await db
-      .update(uktBills)
-      .set(data)
-      .where(eq(uktBills.id, id))
-      .returning();
+  static async edit(
+    billNumber: number,
+    payload: Partial<UktBillInsert>,
+    multibankToken?: string
+  ) {
+    if (!multibankToken) {
+      multibankToken = await generateTokenMultibank();
+    }
 
-    if (!uktBill) throw notFound("UktBill not found");
-    return data;
+    try {
+      const res = await fetch(
+        `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
+        {
+          method: "PUT",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${multibankToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = res.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw unprocessable(error);
+    }
   }
 
-  static async delete(id: number) {
-    const [data] = await db
-      .delete(uktBills)
-      .where(eq(uktBills.id, id))
-      .returning();
+  static async delete(billNumber: number, multibankToken?: string) {
+    if (!multibankToken) {
+      multibankToken = await generateTokenMultibank();
+    }
 
-    if (!data) throw notFound();
-    return data;
+    try {
+      const res = await fetch(
+        `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
+        {
+          method: "DELETE",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${multibankToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = res.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      throw unprocessable(error);
+    }
   }
 }

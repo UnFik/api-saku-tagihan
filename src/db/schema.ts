@@ -1,52 +1,15 @@
 import {
-  date,
   integer,
   pgTable,
   varchar,
   timestamp,
-  uuid,
   serial,
-  pgEnum,
 } from "drizzle-orm/pg-core";
-import { sql } from "drizzle-orm";
-
-export const flagStatusEnum = pgEnum("flag_status", ["88", "01", "02"]);
-export const statusEnum = pgEnum("status", ["BARU", "DIPROSES", "TERVERIFIKASI"]);
-
-export const users = pgTable("users", {
-  id: uuid("id")
-    .primaryKey()
-    .notNull()
-    .default(sql`gen_random_uuid()`),
-  name: varchar({ length: 255 }).notNull(),
-  username: varchar({ length: 255 }).notNull(),
-  password: varchar({ length: 255 }).notNull(),
-  role: varchar({ length: 255 }).notNull(),
-});
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 
 export const uktBills = pgTable("ukt_bills", {
   id: serial("id").primaryKey().notNull(),
 
-  name: varchar("name", { length: 255 }).notNull(),
-  semester: varchar("semester", { length: 255 }).notNull(),
-  billNumber: varchar("bill_number", { length: 255 }).notNull(),
-  nim: varchar("nim", { length: 255 }).notNull(),
-  amount: integer("amount").notNull(),
-  status: statusEnum("status").default("BARU").notNull(), // NF
-  filename: varchar("filename", { length: 255 }).notNull(),
-  description: varchar("description", { length: 255 }).notNull(),
-  uktCategory: varchar("ukt_category", { length: 255 }).notNull(),
-  dueDate: date("due_date").notNull(),
-  flagStatus: flagStatusEnum("flag_status").default("88").notNull(),
-
-  majorId: varchar("major_id", { length: 255 }).notNull(),
-  billIssueId: varchar("bill_issue_id", { length: 255 }).notNull(),
-
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updateAt: timestamp("update_at").defaultNow().notNull().$onUpdate(() => new Date()),
+  filename: varchar({ length: 255 }).notNull(),
 });
 
 export const uktDispensations = pgTable("ukt_dispensations", {

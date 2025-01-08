@@ -25,55 +25,12 @@ const billGroupsController = new Elysia({
     (app) =>
       app
         .resolve(getAuthUserId)
-        .get(
-          "",
-          async ({ headers, cookie: { multibank } }) => {
-            const data = await BillGroupService.getAll(
-              multibank.value || headers.multibank
-            );
-            return data;
-          },
-          {
-            detail: {
-              tags: ["Bill Groups"],
-              summary: "Mendapatkan semua data bill group",
-              description:
-                "Endpoint ini digunakan untuk mengambil semua data bill group",
-              responses: {
-                "200": {
-                  description: "Berhasil mendapatkan data bill group",
-                  content: {
-                    "application/json": {
-                      schema: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            id: { type: "number" },
-                            name: { type: "string" },
-                            description: { type: "string" },
-                            detail: { type: "string" },
-                            createdAt: { type: "string", format: "date-time" },
-                            updatedAt: { type: "string", format: "date-time" },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                "401": {
-                  description:
-                    "Unauthorized - Token tidak valid atau tidak ada",
-                },
-              },
-              security: [
-                {
-                  bearerAuth: [],
-                },
-              ],
-            },
-          }
-        )
+        .get("", async ({ headers, cookie: { multibank } }) => {
+          const data = await BillGroupService.getAll(
+            multibank.value || headers.multibank
+          );
+          return data;
+        })
         .post(
           "",
           async ({ headers, body, set, cookie: { multibank } }) => {
