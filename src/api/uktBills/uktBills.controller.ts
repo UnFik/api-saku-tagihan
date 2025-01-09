@@ -32,7 +32,7 @@ const uktBillsController = new Elysia({
             return data;
           },
           {
-            query: t.Partial(uktBillQuery),
+            query: uktBillQuery,
           }
         )
         .post(

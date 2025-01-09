@@ -53,7 +53,7 @@ export const uktBillBase = t.Pick(uktBillInsert, [
   "name",
   "flag_status",
   "due_date",
-  "filename"
+  "filename",
 ]);
 export type UktBillBase = Static<typeof uktBillBase>;
 
@@ -61,10 +61,10 @@ export const uktBillPayload = uktBillBase;
 export type UktBillPayload = Static<typeof uktBillPayload>;
 
 export const uktBillQuery = t.Object({
-  semester: t.Optional(t.Number({ minLength: 1 })),
-  prodi: t.Optional(t.String({ minLength: 1 })),
-  bill_issue: t.Optional(t.Number()),
-  per_page: t.Optional(t.Numeric({ minimum: 1 })),
+  semester: t.Optional(t.String()),
+  prodi: t.Optional(t.String()),
+  bill_issue: t.Optional(t.String()),
+  per_page: t.Optional(t.Numeric()),
 });
 
 export type UktBillQuery = Static<typeof uktBillQuery>;

@@ -1,13 +1,7 @@
 import { db } from "@/db";
 import { uktBills } from "@/db/schema";
-import type {
-  UktBillInsert,
-  UktBillQuery,
-} from "./uktBills.schema";
-import {
-  generateTokenMultibank,
-  unprocessable,
-} from "@/common/utils";
+import type { UktBillInsert, UktBillQuery } from "./uktBills.schema";
+import { generateTokenMultibank, unprocessable } from "@/common/utils";
 import { env } from "bun";
 
 export abstract class UktBillService {
@@ -73,12 +67,12 @@ export abstract class UktBillService {
       });
 
       if (res.status !== 200) {
-        return res.json()
+        return res.json();
       }
 
-      console.log(res)
+      console.log(res);
       const data = await res.json();
-      console.log(data)
+      console.log(data);
 
       const upload = await db
         .insert(uktBills)
