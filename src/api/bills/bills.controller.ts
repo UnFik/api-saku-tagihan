@@ -1,10 +1,10 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
 import { getAuthUserId, unauthorized } from "@/common/utils";
-import { UktBillService } from "./uktBills.service";
-import { uktBillInsert, uktBillQuery } from "./uktBills.schema";
+import { BillService } from "./bills.service";
+import { billBase, billInsert, billQuery } from "./bills.schema"
 
-const uktBillsController = new Elysia({
+const billsController = new Elysia({
   prefix: "/tagihan-ukt",
 })
   .use(jwt)
@@ -24,24 +24,18 @@ const uktBillsController = new Elysia({
         .resolve(getAuthUserId)
         .get(
           "",
-          async ({ query, cookie: { multibank }, headers }) => {
-            const data = await UktBillService.getAll(
-              query,
-              multibank.value || headers.multibank
-            );
+          async ({ query }) => {
+            const data = await BillService.getAll(query);
             return data;
           },
           {
-            query: uktBillQuery,
+            query: billQuery,
           }
         )
         .post(
           "",
           async ({ body, set, cookie: { multibank }, headers }) => {
-            const data = await UktBillService.create(
-              body,
-              multibank.value ?? headers.multibank
-            );
+            const data = await BillService.create(body);
             set.status = 201;
             if (!data.success) {
               set.status = data.status;
@@ -49,21 +43,13 @@ const uktBillsController = new Elysia({
             return data;
           },
           {
-            body: uktBillInsert,
+            body: billInsert,
           }
         )
         .get(
           "/:billNumber",
-          async ({
-            params: { billNumber },
-            set,
-            cookie: { multibank },
-            headers,
-          }) => {
-            const data = await UktBillService.find(
-              billNumber,
-              multibank.value ?? headers.multibank
-            );
+          async ({ params: { billNumber }, set }) => {
+            const data = await BillService.find(billNumber);
             set.status = 200;
             if (!data.success) {
               set.status = data.status;
@@ -80,7 +66,7 @@ const uktBillsController = new Elysia({
             cookie: { multibank },
             headers,
           }) => {
-            const data = await UktBillService.delete(
+            const data = await BillService.delete(
               billNumber,
               multibank.value ?? headers.multibank
             );
@@ -94,18 +80,8 @@ const uktBillsController = new Elysia({
         )
         .put(
           "/:billNumber",
-          async ({
-            params: { billNumber },
-            body,
-            set,
-            cookie: { multibank },
-            headers,
-          }) => {
-            const data = await UktBillService.edit(
-              billNumber,
-              body,
-              multibank.value ?? headers.multibank
-            );
+          async ({ params: { billNumber }, body, set }) => {
+            const data = await BillService.edit(billNumber, body);
             set.status = 200;
             if (!data.success) {
               set.status = data.status;
@@ -114,9 +90,9 @@ const uktBillsController = new Elysia({
           },
           {
             params: t.Object({ billNumber: t.Number() }),
-            body: t.Partial(uktBillInsert),
+            body: billBase,
           }
         )
   );
 
-export default uktBillsController;
+export default billsController;

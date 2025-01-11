@@ -5,10 +5,11 @@ import { generateTokenMultibank, unprocessable } from "./common/utils";
 import usersController from "@/api/users/users.controller";
 // import billTypesController from "@/api/referensi/billType/billTypes.controller";
 import dispensationTypesController from "./api/referensi/dispensationType/dispensationTypes.controller";
-import uktBillsController from "./api/uktBills/uktBills.controller";
+import billsController from "./api/bills/bills.controller";
 import billIssuesController from "./api/referensi/billIssues/billIssues.controller";
 import billGroupsController from "./api/referensi/billGroup/billGroups.controller";
 import { swagger } from "@elysiajs/swagger";
+import unitController from "@/api/unit/unit.controller";
 
 const app = new Elysia({ prefix: "/api" })
   .use(
@@ -59,7 +60,8 @@ const app = new Elysia({ prefix: "/api" })
   .use(billIssuesController)
   .use(billGroupsController)
   .use(dispensationTypesController)
-  .use(uktBillsController)
+  .use(billsController)
+  .use(unitController)
   .get("/refresh-token", async ({ cookie: { multibank } }) => {
     const token = await generateTokenMultibank();
 
