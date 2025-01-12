@@ -24,3 +24,8 @@ interface DataProdi {
   prodi_dikti: string;
   pesan: string;
 }
+
+export type DrizzleWhere<T> =
+  | SQL<unknown>
+  | ((aliases: T) => SQL<T> | undefined)
+  | undefined;

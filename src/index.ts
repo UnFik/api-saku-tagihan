@@ -10,6 +10,7 @@ import billIssuesController from "./api/referensi/billIssues/billIssues.controll
 import billGroupsController from "./api/referensi/billGroup/billGroups.controller";
 import { swagger } from "@elysiajs/swagger";
 import unitController from "@/api/unit/unit.controller";
+import serviceTypesController from "@/api/referensi/serviceTypes/serviceTypes.controller";
 
 const app = new Elysia({ prefix: "/api" })
   .use(
@@ -62,6 +63,7 @@ const app = new Elysia({ prefix: "/api" })
   .use(dispensationTypesController)
   .use(billsController)
   .use(unitController)
+  .use(serviceTypesController)
   .get("/refresh-token", async ({ cookie: { multibank } }) => {
     const token = await generateTokenMultibank();
 

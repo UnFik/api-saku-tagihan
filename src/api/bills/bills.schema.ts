@@ -28,7 +28,7 @@ export type BillReturn = Static<typeof billReturn>;
 
 export const billBase = t.Object({
   amount: t.Optional(t.Number()),
-  dueDate: t.Optional(t.Date()),
+  dueDate: t.Nullable(t.Date()),
 });
 
 export type BillBase = Static<typeof billBase>;
@@ -38,8 +38,10 @@ export type BillPayload = Static<typeof billPayload>;
 
 export const billQuery = t.Object({
   semester: t.Optional(t.String()),
-  prodi: t.Optional(t.String()),
-  bill_issue: t.Optional(t.String()),
+  unitName: t.Optional(t.String()),
+  billIssueId: t.Optional(t.String()),
+  serviceTypeId: t.Optional(t.String()),
+  operator: t.Optional(t.Enum({ and: "and", or: "or" })),
   per_page: t.Optional(t.Numeric()),
 });
 

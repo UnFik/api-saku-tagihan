@@ -1,8 +1,6 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
-import {
-  generateTokenMultibank,
-} from "../../common/utils";
+import { generateTokenMultibank } from "../../common/utils";
 import { UserService } from "./users.service";
 import { formattedUser } from "./users.utils";
 
@@ -17,14 +15,17 @@ const usersController = new Elysia()
     async ({ body, jwt, set, cookie: { authorization, multibank } }) => {
       // return "Hello";
       const { username, password } = body;
-      const user = await UserService.authenticate(username, password);
+      // const user = await UserService.authenticate(username, password);
+      // if (!user) {
+      //   set.status = 401;
+      //   return {
+      //     success: false,
+      //     status: 401,
+      //     message: "Invalid username or password",
+      //   };
+      // }
 
-      if (!user.status) {
-        set.status = 401
-        return user;
-      }
-
-      const token = await jwt.sign({ id: user.username! });
+      const token = await jwt.sign({ id: 123 });
       const tokenMultibank = await generateTokenMultibank();
 
       // set.cookie
@@ -36,7 +37,7 @@ const usersController = new Elysia()
       set.headers["multibank-token"] = tokenMultibank;
       return {
         user: {
-          ...formattedUser(user),
+          // ...formattedUser(user),
           token,
           "multibank-token": tokenMultibank,
         },

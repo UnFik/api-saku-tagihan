@@ -28,7 +28,7 @@ export const bills = pgTable("bills", {
   billNumber: integer("bill_number").notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   semester: integer("semester"),
-  nim: varchar("nim", { length: 255 }).notNull(),
+  identityNumber: varchar("identity_number", { length: 255 }).notNull(),
   amount: integer("amount").notNull(),
   flagStatus: flagBillEnum("flag_status").notNull(),
   dueDate: date("due_date"),
@@ -38,12 +38,14 @@ export const bills = pgTable("bills", {
   billIssueId: varchar("bill_issue_id", { length: 255 }).notNull(),
   billGroupId: varchar("bill_group_id", { length: 255 }).notNull(),
 
-  typeService: typeServiceEnum("type_service").notNull(),
   paidDate: date("paid_date"),
 
   unitId: integer("unit_id")
     .notNull()
     .references(() => unit.id),
+  serviceTypeId: integer("service_type_id")
+    .notNull()
+    .references(() => serviceTypes.id),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updateAt: timestamp("update_at").defaultNow().notNull(),
@@ -51,8 +53,8 @@ export const bills = pgTable("bills", {
 
 export const unit = pgTable("unit", {
   id: serial("id").primaryKey().notNull(),
-  name: varchar("nama_unit", { length: 255 }).notNull(),
-  code: varchar("kode_unit", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  code: varchar("code", { length: 255 }).notNull().unique(),
   company: varchar("company", { length: 255 }).notNull(),
   flag_status: flagUnitEnum("flag_unit").notNull(),
 
@@ -83,6 +85,21 @@ export const dispensationTypes = pgTable("dispensation_types", {
 
   name: varchar("name", { length: 255 }).notNull(),
   description: varchar("description", { length: 255 }).notNull(),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updateAt: timestamp("update_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
+export const serviceTypes = pgTable("service_types", {
+  id: serial("id").primaryKey().notNull(),
+
+  name: varchar("name", { length: 255 }).notNull(),
+  type: varchar("type", { length: 255 }).notNull(),
+  typeServiceId: typeServiceEnum("type_service_id").notNull(),
+  description: varchar("description", { length: 255 }),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updateAt: timestamp("update_at")

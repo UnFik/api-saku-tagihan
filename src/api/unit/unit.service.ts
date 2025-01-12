@@ -28,6 +28,18 @@ export abstract class UnitService {
 
   static async create(payload: UnitInsert) {
     try {
+      const [isExist] = await db
+        .select()
+        .from(unit)
+        .where(eq(unit.code, payload.code));
+
+      if (isExist) {
+        return {
+          success: false,
+          status: 409,
+          message: "Kode unit sudah digunakan",
+        };
+      }
       const [data] = await db.insert(unit).values(payload).returning();
       return { data, success: true };
     } catch (error) {
@@ -102,7 +114,7 @@ export abstract class UnitService {
             name: item.namaProdi,
             code: item.kodeProdi,
             company: item.namaFakultas,
-            flag_status: '1'
+            flag_status: "1",
           })
           .returning();
       }

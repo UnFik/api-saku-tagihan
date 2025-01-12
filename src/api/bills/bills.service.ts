@@ -1,19 +1,59 @@
 import { db } from "@/db";
-import { bills, unit } from "@/db/schema";
-import type { BillBase, BillInsert, BillQuery } from "./bills.schema";
-import { generateTokenMultibank, unprocessable } from "@/common/utils";
-import { env } from "bun";
-import { eq } from "drizzle-orm";
-
+import { bills, serviceTypes, unit } from "@/db/schema";
+import type {
+  BillBase,
+  BillInsert,
+  BillQuery,
+  BillSelect,
+} from "./bills.schema";
+import { unprocessable } from "@/common/utils";
+import { eq, and, or, type SQL } from "drizzle-orm";
+import { filterColumn } from "@/common/filter-column";
+import { DrizzleWhere } from "@/types";
 export abstract class BillService {
   static async getAll(query: BillQuery) {
+    const { semester, unitName, billIssueId, serviceTypeId, per_page, operator } =
+      query;
+
+    const expressions: (SQL<unknown> | undefined)[] = [
+      semester
+        ? filterColumn({
+            column: bills.semester,
+            value: semester,
+          })
+        : undefined,
+      unitName
+        ? filterColumn({
+            column: unit.name,
+            value: unitName,
+          })
+        : undefined,
+      billIssueId
+        ? filterColumn({
+            column: bills.billIssueId,
+            value: String(billIssueId),
+          })
+        : undefined,
+      serviceTypeId
+        ? filterColumn({
+            column: bills.serviceTypeId,
+            value: serviceTypeId,
+          })
+        : undefined,
+    ];
+
+    const where: DrizzleWhere<BillSelect> =
+      !operator || operator === "and"
+        ? and(...expressions)
+        : or(...expressions);
+
     const data = await db
       .select({
         id: bills.id,
         billNumber: bills.billNumber,
         name: bills.name,
         semester: bills.semester,
-        nim: bills.nim,
+        identityNumber: bills.identityNumber,
         amount: bills.amount,
         flagStatus: bills.flagStatus,
         dueDate: bills.dueDate,
@@ -21,17 +61,28 @@ export abstract class BillService {
         billIssueId: bills.billIssueId,
         billGroupId: bills.billGroupId,
         paidDate: bills.paidDate,
+        serviceType: {
+          id: bills.serviceTypeId,
+          name: serviceTypes.name,
+          type: serviceTypes.type,
+          typeServiceId: serviceTypes.typeServiceId,
+        },
         unitId: bills.unitId,
-        createdAt: bills.createdAt,
-        updateAt: bills.updateAt,
         unitName: unit.name,
         code: unit.code,
-        company: unit.company,
+        createdAt: bills.createdAt,
+        updateAt: bills.updateAt,
       })
       .from(bills)
-      .leftJoin(unit, eq(unit.id, bills.unitId));
+      .leftJoin(unit, eq(unit.id, bills.unitId))
+      .leftJoin(serviceTypes, eq(serviceTypes.id, bills.serviceTypeId))
+      .where(where);
 
-    return { data, success: true, message: "Berhasil mendapatkan data tagihan" };
+    return {
+      data,
+      success: true,
+      message: "Berhasil mendapatkan data tagihan",
+    };
   }
 
   static async find(id: number) {
@@ -47,7 +98,11 @@ export abstract class BillService {
         status: 404,
       };
 
-    return { data, success: true, message: "Berhasil mendapatkan data tagihan" };
+    return {
+      data,
+      success: true,
+      message: "Berhasil mendapatkan data tagihan",
+    };
   }
 
   static async create(payload: BillInsert) {
@@ -76,7 +131,11 @@ export abstract class BillService {
       };
     }
     const data = await db.insert(bills).values(payload).returning();
-    return { data: data[0], success: true, message: "Berhasil membuat tagihan" };
+    return {
+      data: data[0],
+      success: true,
+      message: "Berhasil membuat tagihan",
+    };
   }
 
   // static async create(payload: BillInsert, multibankToken?: string) {
@@ -158,27 +217,31 @@ export abstract class BillService {
   }
 
   static async delete(billNumber: number, multibankToken?: string) {
-    if (!multibankToken) {
-      multibankToken = await generateTokenMultibank();
-    }
-
     try {
-      const res = await fetch(
-        `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
-        {
-          method: "DELETE",
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${multibankToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const [data] = await db
+        .delete(bills)
+        .where(eq(bills.billNumber, billNumber))
+        .returning({
+          id: bills.id,
+          name: bills.name,
+          billNumber: bills.billNumber,
+        });
 
-      const data = res.json();
-      return data;
+      if (!data) {
+        return {
+          success: false,
+          status: 404,
+          message: "Bill Number Tagihan tidak ditemukan",
+        };
+      }
+
+      return {
+        data,
+        success: true,
+        message: `Berhasil menghapus tagihan ${data.billNumber}`,
+      };
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error(error);
       throw unprocessable(error);
     }
   }

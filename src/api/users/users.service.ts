@@ -4,21 +4,30 @@ import { env } from "bun";
 
 export abstract class UserService {
   static async authenticate(username: string, password: string) {
-    const formData = new FormData();
-    formData.append("username", username);
-    formData.append("password", password);
+    try {
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("password", password);
 
-    const response = await fetch(`${env.SIAKAD_API_URL}/as400/signin/`, {
-      method: "POST",
-      body: formData,
-      headers: {
-        Accept: "application/json",
-      },
-    });
+      const response = await fetch(
+        `${env.SIAKAD_API_URL_PRIVATE}/as400/signin/`,
+        {
+          method: "POST",
+          body: formData,
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
 
-    const data: AuthSiakad = await response.json();
+      console.log(response);
 
-    return data;
+      const data: AuthSiakad = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error authenticating user:", error);
+      return undefined;
+    }
   }
 
   // static find(id: string) {

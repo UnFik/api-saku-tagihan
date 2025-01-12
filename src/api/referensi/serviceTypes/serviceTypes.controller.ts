@@ -1,11 +1,11 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
 import { getAuthUserId, unauthorized } from "@/common/utils";
-import { UnitService } from "./unit.service";
-import { unitBase, unitInsert, unitQuery } from "./unit.schema";
+import { ServiceTypeService } from "./serviceTypes.service";
+import { serviceTypeBase, serviceTypeInsert, serviceTypeQuery } from "./serviceTypes.schema";
 
-const unitController = new Elysia({
-  prefix: "/unit",
+const serviceTypesController = new Elysia({
+  prefix: "/referensi/service-types",
 })
   .use(jwt)
   .guard(
@@ -25,32 +25,28 @@ const unitController = new Elysia({
         .get(
           "",
           async ({ query }) => {
-            const data = await UnitService.getAll(query);
+            const data = await ServiceTypeService.getAll(query);
             return data;
           },
           {
-            query: unitQuery,
+            query: serviceTypeQuery,
           }
         )
         .post(
           "",
           async ({ body, set }) => {
-            const data = await UnitService.create(body);
+            const data = await ServiceTypeService.create(body);
             set.status = 201;
-            if (!data.success) {
-              set.status = data.status;
-            }
             return data;
           },
           {
-            body: unitInsert,
+            body: serviceTypeInsert,
           }
         )
         .get(
           "/:id",
           async ({ params: { id }, set }) => {
-            const data = await UnitService.find(id);
-            set.status = 200;
+            const data = await ServiceTypeService.find(id);
             if (!data.success) {
               set.status = data.status;
             }
@@ -61,32 +57,22 @@ const unitController = new Elysia({
         .put(
           "/:id",
           async ({ params: { id }, body, set }) => {
-            const data = await UnitService.edit(id, body);
-            set.status = 200;
-            if (!data.success) {
-              set.status = data.status;
-            }
+            const data = await ServiceTypeService.edit(id, body);
             return data;
           },
           {
             params: t.Object({ id: t.Number() }),
-            body: t.Partial(unitBase),
+            body: t.Partial(serviceTypeBase),
           }
         )
         .delete(
           "/:id",
           async ({ params: { id }, set }) => {
-            const data = await UnitService.delete(id);
-            set.status = 200;
+            const data = await ServiceTypeService.delete(id);
             return data;
           },
           { params: t.Object({ id: t.Number() }) }
         )
-        .post("sync", async ({ set }) => {
-          const data = await UnitService.sync();
-          set.status = 200;
-          return data;
-        })
   );
 
-export default unitController;
+export default serviceTypesController;
