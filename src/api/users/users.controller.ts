@@ -15,15 +15,15 @@ const usersController = new Elysia()
     async ({ body, jwt, set, cookie: { authorization, multibank } }) => {
       // return "Hello";
       const { username, password } = body;
-      // const user = await UserService.authenticate(username, password);
-      // if (!user) {
-      //   set.status = 401;
-      //   return {
-      //     success: false,
-      //     status: 401,
-      //     message: "Invalid username or password",
-      //   };
-      // }
+      const user = await UserService.authenticate(username, password);
+      if (!user) {
+        set.status = 401;
+        return {
+          success: false,
+          status: 401,
+          message: "Invalid username or password",
+        };
+      }
 
       const token = await jwt.sign({ id: 123 });
       const tokenMultibank = await generateTokenMultibank();

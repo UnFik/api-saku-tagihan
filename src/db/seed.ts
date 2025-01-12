@@ -56,14 +56,14 @@ async function main() {
     },
     {
       name: 'Invoice SPP Labschool, TTKA Ceria, PKh, SD PGSD, dll',
-      type: "Tagihan Layanan Pendidikan Lainnya",
+      type: "Tagihan Layanan Pendidikan Lainnya", 
       typeServiceId: "2",
       description: "Layanan 2",
     },
     {
       name: 'Invoice Kerjasama Beasiswa',
       type: "Tagihan Layanan Pendidikan Lainnya",
-      typeServiceId: "2",
+      typeServiceId: "2", 
       description: "Layanan 2",
     },
     {
@@ -80,14 +80,14 @@ async function main() {
     },
     {
       name: 'Invoice Kerjasama Pemerintah Non UKT',
-      type: "Tagihan Layanan Non Pendidikan", 
+      type: "Tagihan Layanan Non Pendidikan",
       typeServiceId: "3",
       description: "Layanan 3",
     },
     {
       name: 'Invoice PPP',
       type: "Tagihan Layanan Non Pendidikan",
-      typeServiceId: "3", 
+      typeServiceId: "3",
       description: "Layanan 3",
     },
     {
@@ -98,7 +98,7 @@ async function main() {
     },
     {
       name: 'Invoice Sarana Olahraga Lainnya',
-      type: "Tagihan Layanan Non Pendidikan", 
+      type: "Tagihan Layanan Non Pendidikan",
       typeServiceId: "3",
       description: "Layanan 3",
     },
@@ -132,7 +132,15 @@ async function main() {
       typeServiceId: "3",
       description: "Layanan 3",
     }
-  ])
+  ]).returning({
+    id: serviceTypes.id,
+    name: serviceTypes.name,
+    type: serviceTypes.type,
+    typeServiceId: serviceTypes.typeServiceId,
+    description: serviceTypes.description,
+    createdAt: serviceTypes.createdAt,
+    updateAt: serviceTypes.updateAt
+  });
 
   console.log("Jenis Layanan berhasil ditambahkan: ", service);
 

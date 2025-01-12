@@ -3,6 +3,7 @@ import { BillGroupsInsert, BillGroupsPayload } from "./billGroups.schema";
 import { refreshTokenMultibank } from "@/common/utils";
 import { env } from "bun";
 import * as Sentry from "@sentry/bun";
+import { ResponseService } from "@/types";
 
 export abstract class BillGroupService {
   static async getAll(token?: string): Promise<any> {

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { UnitBase, UnitInsert, UnitQuery } from "./unit.schema";
 import { notFound, unprocessable } from "@/common/utils";
 import { env } from "bun";
+import { ResProdi } from "@/types";
 
 export abstract class UnitService {
   static async getAll(query: UnitQuery) {
@@ -11,13 +12,13 @@ export abstract class UnitService {
     return { data, success: true };
   }
 
-  static async find(id: number) {
+  static async find(unitCode: string) {
     const data = await db.query.unit.findFirst({
-      where: eq(unit.id, id),
+      where: eq(unit.code, unitCode),
     });
 
     if (!data) {
-      return {
+      return {  
         success: false,
         status: 404,
       };
@@ -47,9 +48,9 @@ export abstract class UnitService {
     }
   }
 
-  static async edit(id: number, payload: Partial<UnitBase>) {
+  static async edit(unitCode: string, payload: Partial<UnitBase>) {
     try {
-      const [isExist] = await db.select().from(unit).where(eq(unit.id, id));
+      const [isExist] = await db.select().from(unit).where(eq(unit.code, unitCode));
       if (!isExist) {
         return { success: false, status: 404 };
       }
@@ -57,7 +58,7 @@ export abstract class UnitService {
       const [data] = await db
         .update(unit)
         .set(payload)
-        .where(eq(unit.id, id))
+        .where(eq(unit.code, unitCode))
         .returning();
 
       if (!data) throw notFound();
@@ -67,8 +68,8 @@ export abstract class UnitService {
     }
   }
 
-  static async delete(id: number) {
-    const [data] = await db.delete(unit).where(eq(unit.id, id)).returning();
+  static async delete(unitCode: string) {
+    const [data] = await db.delete(unit).where(eq(unit.code, unitCode)).returning();
 
     if (!data) throw notFound();
     return { data, success: true };

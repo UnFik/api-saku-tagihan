@@ -8,6 +8,7 @@ import type {
 import { notFound, unprocessable } from "@/common/utils";
 import { env } from "bun";
 import { refreshTokenMultibank } from "@/common/utils";
+import { ResponseService } from "@/types";
 
 export abstract class BillIssueService {
   static async getAll(token?: string): Promise<void> {

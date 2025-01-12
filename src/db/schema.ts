@@ -6,6 +6,7 @@ import {
   serial,
   pgEnum,
   date,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 export const flagBillEnum = pgEnum("flag_status_bill", ["88", "01", "02"]); // 88 = hold, 01 = process, 02 = paid
@@ -25,7 +26,7 @@ export const users = pgTable("users", {
 export const bills = pgTable("bills", {
   id: serial("id").primaryKey().notNull(),
 
-  billNumber: integer("bill_number").notNull().unique(),
+  billNumber: bigint("bill_number", { mode: "number" }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   semester: integer("semester"),
   identityNumber: varchar("identity_number", { length: 255 }).notNull(),
@@ -40,9 +41,9 @@ export const bills = pgTable("bills", {
 
   paidDate: date("paid_date"),
 
-  unitId: integer("unit_id")
+  unitCode: varchar("unit_code", { length: 255 })
     .notNull()
-    .references(() => unit.id),
+    .references(() => unit.code),
   serviceTypeId: integer("service_type_id")
     .notNull()
     .references(() => serviceTypes.id),

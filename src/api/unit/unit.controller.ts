@@ -47,21 +47,21 @@ const unitController = new Elysia({
           }
         )
         .get(
-          "/:id",
-          async ({ params: { id }, set }) => {
-            const data = await UnitService.find(id);
+          "/:unitCode",
+          async ({ params: { unitCode }, set }) => {
+            const data = await UnitService.find(unitCode);
             set.status = 200;
             if (!data.success) {
               set.status = data.status;
             }
             return data;
           },
-          { params: t.Object({ id: t.Number() }) }
+          { params: t.Object({ unitCode: t.String() }) }
         )
         .put(
-          "/:id",
-          async ({ params: { id }, body, set }) => {
-            const data = await UnitService.edit(id, body);
+          "/:unitCode",
+          async ({ params: {unitCode }, body, set }) => {
+            const data = await UnitService.edit(unitCode, body);
             set.status = 200;
             if (!data.success) {
               set.status = data.status;
@@ -69,18 +69,18 @@ const unitController = new Elysia({
             return data;
           },
           {
-            params: t.Object({ id: t.Number() }),
+            params: t.Object({unitCode: t.String() }),
             body: t.Partial(unitBase),
           }
         )
         .delete(
-          "/:id",
-          async ({ params: { id }, set }) => {
-            const data = await UnitService.delete(id);
+          "/:unitCode",
+          async ({ params: {unitCode }, set }) => {
+            const data = await UnitService.delete(unitCode);
             set.status = 200;
             return data;
           },
-          { params: t.Object({ id: t.Number() }) }
+          { params: t.Object({unitCode: t.String() }) }
         )
         .post("sync", async ({ set }) => {
           const data = await UnitService.sync();

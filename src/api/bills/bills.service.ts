@@ -67,14 +67,14 @@ export abstract class BillService {
           type: serviceTypes.type,
           typeServiceId: serviceTypes.typeServiceId,
         },
-        unitId: bills.unitId,
+        unitId: bills.unitCode,
         unitName: unit.name,
         code: unit.code,
         createdAt: bills.createdAt,
         updateAt: bills.updateAt,
       })
       .from(bills)
-      .leftJoin(unit, eq(unit.id, bills.unitId))
+      .leftJoin(unit, eq(unit.code, bills.unitCode))
       .leftJoin(serviceTypes, eq(serviceTypes.id, bills.serviceTypeId))
       .where(where);
 
@@ -90,7 +90,7 @@ export abstract class BillService {
       .select()
       .from(bills)
       .where(eq(bills.id, id))
-      .leftJoin(unit, eq(unit.id, bills.unitId));
+      .leftJoin(unit, eq(unit.code, bills.unitCode));
 
     if (!data)
       return {
@@ -109,7 +109,7 @@ export abstract class BillService {
     const [unitId] = await db
       .select()
       .from(unit)
-      .where(eq(unit.id, payload.unitId));
+      .where(eq(unit.code, String(payload.unitCode)));
 
     if (!unitId) {
       return {
