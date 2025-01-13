@@ -37,7 +37,7 @@ const usersController = new Elysia()
       set.headers["multibank-token"] = tokenMultibank;
       return {
         user: {
-          // ...formattedUser(user),
+          ...formattedUser(user),
           token,
           "multibank-token": tokenMultibank,
         },
