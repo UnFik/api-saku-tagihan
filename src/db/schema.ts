@@ -20,7 +20,10 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 255 }).notNull(),
   password: varchar("password", { length: 255 }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updateAt: timestamp("update_at").defaultNow().notNull(),
+  updateAt: timestamp("update_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export const bills = pgTable("bills", {
@@ -49,7 +52,10 @@ export const bills = pgTable("bills", {
     .references(() => serviceTypes.id),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updateAt: timestamp("update_at").defaultNow().notNull(),
+  updateAt: timestamp("update_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export const unit = pgTable("unit", {
@@ -60,7 +66,10 @@ export const unit = pgTable("unit", {
   flag_status: flagUnitEnum("flag_unit").notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updateAt: timestamp("update_at").defaultNow().notNull(),
+  updateAt: timestamp("update_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
 });
 
 export const uktDispensations = pgTable("ukt_dispensations", {
@@ -97,7 +106,7 @@ export const dispensationTypes = pgTable("dispensation_types", {
 export const serviceTypes = pgTable("service_types", {
   id: serial("id").primaryKey().notNull(),
 
-  name: varchar("name", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull().unique(),
   type: varchar("type", { length: 255 }).notNull(),
   typeServiceId: typeServiceEnum("type_service_id").notNull(),
   description: varchar("description", { length: 255 }),

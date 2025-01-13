@@ -7,7 +7,7 @@ import type {
   BillSelect,
 } from "./bills.schema";
 import { unprocessable } from "@/common/utils";
-import { eq, and, or, type SQL } from "drizzle-orm";
+import { eq, and, or, type SQL, inArray } from "drizzle-orm";
 import { filterColumn } from "@/common/filter-column";
 import { DrizzleWhere } from "@/types";
 export abstract class BillService {
@@ -242,6 +242,53 @@ export abstract class BillService {
       };
     } catch (error) {
       console.error(error);
+      throw unprocessable(error);
+    }
+  }
+
+  static async createMany(payload: BillInsert[]) {
+    try {
+      // Validasi unit untuk setiap tagihan
+      const unitCodes = [...new Set(payload.map(bill => bill.unitCode))];
+      const units = await db
+        .select()
+        .from(unit)
+        .where(inArray(unit.code, unitCodes));
+
+      if (units.length !== unitCodes.length) {
+        return {
+          success: false,
+          status: 400,
+          message: "Beberapa kode unit tidak ditemukan",
+        };
+      }
+
+      // Validasi nomor tagihan unik
+      const billNumbers = payload.map(bill => bill.billNumber);
+      const existingBills = await db
+        .select()
+        .from(bills)
+        .where(inArray(bills.billNumber, billNumbers));
+
+      if (existingBills.length > 0) {
+        return {
+          success: false,
+          status: 400,
+          message: "Beberapa nomor tagihan sudah digunakan",
+          data: existingBills.map(bill => bill.billNumber)
+        };
+      }
+
+      // Insert batch tagihan
+      const data = await db.insert(bills).values(payload).returning();
+
+      return {
+        data: data.map(bill => bill.billNumber),
+        success: true,
+        message: `Berhasil membuat ${data.length} tagihan`,
+      };
+    } catch (error) {
+      console.error("Error creating bills:", error);
       throw unprocessable(error);
     }
   }

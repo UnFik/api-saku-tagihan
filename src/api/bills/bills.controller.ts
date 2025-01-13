@@ -93,6 +93,20 @@ const billsController = new Elysia({
             body: billBase,
           }
         )
+        .post(
+          "/batch",
+          async ({ body, set }) => {
+            const data = await BillService.createMany(body);
+            set.status = 201;
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
+          },
+          {
+            body: t.Array(billInsert)
+          }
+        )
   );
 
 export default billsController;
