@@ -1,7 +1,11 @@
 // import "./common/instrument";
 import { Elysia, ValidationError } from "elysia";
 import cors from "@elysiajs/cors";
-import { generateTokenMultibank, unprocessable } from "./common/utils";
+import {
+  generateTokenJurnal,
+  generateTokenMultibank,
+  unprocessable,
+} from "./common/utils";
 import usersController from "@/api/users/users.controller";
 // import billTypesController from "@/api/referensi/billType/billTypes.controller";
 import dispensationTypesController from "./api/referensi/dispensationType/dispensationTypes.controller";
@@ -69,6 +73,21 @@ const app = new Elysia({ prefix: "/api" })
 
     // Set cookie dengan konfigurasi yang lebih aman
     multibank.set({
+      httpOnly: true,
+      maxAge: 60 * 60, // 1 jam
+      value: token,
+      sameSite: "none",
+      secure: true,
+      path: "/",
+    });
+
+    return { token };
+  })
+  .get("/refresh-jurnal", async ({ cookie: { tokenJurnal } }) => {
+    const token = await generateTokenJurnal();
+
+    // Set cookie dengan konfigurasi yang lebih aman
+    tokenJurnal.set({
       httpOnly: true,
       maxAge: 60 * 60, // 1 jam
       value: token,

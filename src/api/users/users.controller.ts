@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
-import { generateTokenMultibank } from "../../common/utils";
+import { generateTokenJurnal, generateTokenMultibank } from "../../common/utils";
 import { UserService } from "./users.service";
 import { formattedUser } from "./users.utils";
 
@@ -12,7 +12,7 @@ const usersController = new Elysia()
   // })
   .post(
     "login",
-    async ({ body, jwt, set, cookie: { authorization, multibank } }) => {
+    async ({ body, jwt, set, cookie: { authorization, multibank, tokenjurnal } }) => {
       // return "Hello";
       const { username, password } = body;
       const user = await UserService.authenticate(username, password);
@@ -27,6 +27,7 @@ const usersController = new Elysia()
 
       const token = await jwt.sign({ id: 123 });
       const tokenMultibank = await generateTokenMultibank();
+      const tokenJurnal = await generateTokenJurnal()
 
       // set.cookie
       authorization.value = token;
@@ -34,12 +35,16 @@ const usersController = new Elysia()
 
       multibank.value = tokenMultibank;
 
+      tokenjurnal.value = tokenJurnal;
+
       set.headers["multibank-token"] = tokenMultibank;
+      set.headers["jurnal-token"] = tokenJurnal;
       return {
         user: {
           ...formattedUser(user),
           token,
           "multibank-token": tokenMultibank,
+          "jurnal-token": tokenJurnal
         },
       };
     },

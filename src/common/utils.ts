@@ -105,7 +105,7 @@ export async function generateTokenMultibank() {
 
 export const refreshTokenMultibank = async () => {
   const res = await fetch(`${env.BASE_URL}/api/refresh-token`, {
-    credentials: 'include'
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -113,10 +113,32 @@ export const refreshTokenMultibank = async () => {
   }
 
   const data = await res.json();
-  
-  if (typeof window !== 'undefined') {
+
+  if (typeof window !== "undefined") {
     document.cookie = `multibank=${data.token}; path=/; secure; samesite=strict`;
   }
-  
+
   return data.token;
+};
+
+export const generateTokenJurnal = async () => {
+  const res = await fetch(`${env.JURNAL_API_URL}/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      username: env.JURNAL_USERNAME,
+      password: env.JURNAL_PASSWORD,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(res.statusText);
+  }
+  const result = await res.json();
+
+  console.log('token jurnal refreshed ', result.token);
+
+  return result.token;
 };

@@ -7,6 +7,8 @@ import {
   pgEnum,
   date,
   bigint,
+  boolean,
+  json,
 } from "drizzle-orm/pg-core";
 
 export const flagBillEnum = pgEnum("flag_status_bill", ["88", "01", "02"]); // 88 = hold, 01 = process, 02 = paid
@@ -36,7 +38,7 @@ export const bills = pgTable("bills", {
   amount: integer("amount").notNull(),
   flagStatus: flagBillEnum("flag_status").notNull(),
   dueDate: date("due_date"),
-
+  isConfirmed: boolean("is_confirmed").default(false).notNull(),
   // For multibank
   billIssue: varchar("bill_issue", { length: 255 }).notNull(),
   billIssueId: varchar("bill_issue_id", { length: 255 }).notNull(),

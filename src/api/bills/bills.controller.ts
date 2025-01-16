@@ -2,7 +2,13 @@ import { Elysia, t } from "elysia";
 import jwt from "@/common/jwt";
 import { getAuthUserId, unauthorized } from "@/common/utils";
 import { BillService } from "./bills.service";
-import { billBase, billInsert, billQuery } from "./bills.schema"
+import {
+  billBase,
+  billConfirm,
+  billInsert,
+  billInsertWithoutNumber,
+  billQuery,
+} from "./bills.schema";
 
 const billsController = new Elysia({
   prefix: "/tagihan-ukt",
@@ -12,9 +18,9 @@ const billsController = new Elysia({
     {
       beforeHandle({
         headers: { authorization, ...headers },
-        cookie: { authorization: cookieAuthorization },
+        cookie: { authorization: cookieAuthorization, ...cookie },
       }) {
-        if (!authorization && !cookieAuthorization.value && headers.multibank) {
+        if (!authorization && !cookieAuthorization.value) {
           throw unauthorized();
         }
       },
@@ -34,7 +40,7 @@ const billsController = new Elysia({
         )
         .post(
           "",
-          async ({ body, set, cookie: { multibank }, headers }) => {
+          async ({ body, set }) => {
             const data = await BillService.create(body);
             set.status = 201;
             if (!data.success) {
@@ -43,7 +49,7 @@ const billsController = new Elysia({
             return data;
           },
           {
-            body: billInsert,
+            body: billInsertWithoutNumber,
           }
         )
         .get(
@@ -63,12 +69,13 @@ const billsController = new Elysia({
           async ({
             params: { billNumber },
             set,
-            cookie: { multibank },
+            cookie: { multibank, tokenjurnal },
             headers,
           }) => {
             const data = await BillService.delete(
               billNumber,
-              multibank.value ?? headers.multibank
+              multibank.value ?? headers.multibank,
+              tokenjurnal.value ?? headers.tokenJurnal
             );
             set.status = 200;
             if (!data.success) {
@@ -104,7 +111,63 @@ const billsController = new Elysia({
             return data;
           },
           {
-            body: t.Array(billInsert)
+            body: t.Array(billInsertWithoutNumber),
+          }
+        )
+        .post(
+          "/confirm",
+          async ({ body, set, headers, cookie: { multibank, tokenjurnal } }) => {
+            const data = await BillService.confirm(
+              body,
+              multibank.value ??  headers.multibank,
+              tokenjurnal.value ?? headers.tokenjurnal 
+            );
+            set.status = 200;
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
+          },
+          {
+            body: billConfirm,
+          }
+        )
+        .put(
+          "/publish",
+          async ({ body, set }) => {
+            const billPayload = body.billNumbers.map((billNumber) => ({
+              billNumber,
+            }));
+            const data = await BillService.publishMany(billPayload);
+            set.status = 200;
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
+          },
+          {
+            body: t.Object({
+              billNumbers: t.Array(t.Number()),
+            }),
+          }
+        )
+        .put(
+          "/payment",
+          async ({ body, set }) => {
+            const billPayload = body.billNumbers.map((billNumber) => ({
+              billNumber,
+            }));
+            const data = await BillService.paymentMany(billPayload);
+            set.status = 200;
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
+          },
+          {
+            body: t.Object({
+              billNumbers: t.Array(t.Number()),
+            }),
           }
         )
   );

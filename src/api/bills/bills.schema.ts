@@ -4,10 +4,20 @@ import { bills } from "@/db/schema";
 
 // Buat schema untuk insert dan select
 export const billInsert = createInsertSchema(bills);
+export const billInsertWithoutNumber = t.Omit(billInsert, ["billNumber"]);
 export const billSelect = createSelectSchema(bills);
 
 export type BillInsert = Static<typeof billInsert>;
+export type BillInsertWithoutNumber = Static<typeof billInsertWithoutNumber>;
 export type BillSelect = Static<typeof billSelect>;
+
+export const billConfirm = t.Object({
+  amount: t.Optional(t.Number()),
+  dueDate: t.Optional(t.Nullable(t.String())),
+  billNumber: t.Number(),
+});
+
+export type BillConfirm = Static<typeof billConfirm>;
 
 export const billReturn = t.Object({
   bill_issue_id: t.Number(),
@@ -38,7 +48,7 @@ export type BillPayload = Static<typeof billPayload>;
 
 export const billQuery = t.Object({
   semester: t.Optional(t.String()),
-  unitName: t.Optional(t.String()),
+  unitCode: t.Optional(t.String()),
   billIssueId: t.Optional(t.String()),
   serviceTypeId: t.Optional(t.String()),
   operator: t.Optional(t.Enum({ and: "and", or: "or" })),
