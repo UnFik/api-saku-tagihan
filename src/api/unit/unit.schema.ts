@@ -22,9 +22,11 @@ export type UnitPayload = Static<typeof unitPayload>;
 
 export const unitQuery = t.Object({
   name: t.Optional(t.String()),
+  flagStatus: t.Optional(t.Number()),
   code: t.Optional(t.String()),
   company: t.Optional(t.String()),
   per_page: t.Optional(t.Numeric()),
+  operator: t.Optional(t.Enum({ and: "and", or: "or" })),
 });
 
 export type UnitQuery = Static<typeof unitQuery>;

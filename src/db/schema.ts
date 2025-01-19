@@ -65,7 +65,7 @@ export const unit = pgTable("unit", {
   name: varchar("name", { length: 255 }).notNull(),
   code: varchar("code", { length: 255 }).notNull().unique(),
   company: varchar("company", { length: 255 }).notNull(),
-  flag_status: flagUnitEnum("flag_unit").notNull(),
+  flagStatus: flagUnitEnum("flag_unit").notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updateAt: timestamp("update_at")

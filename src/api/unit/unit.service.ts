@@ -1,15 +1,55 @@
 import { db } from "@/db";
 import { unit } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import type { UnitBase, UnitInsert, UnitQuery } from "./unit.schema";
+import { and, eq, or, SQL } from "drizzle-orm";
+import type {
+  UnitBase,
+  UnitInsert,
+  UnitQuery,
+  UnitSelect,
+} from "./unit.schema";
 import { notFound, unprocessable } from "@/common/utils";
 import { env } from "bun";
-import { ResProdi } from "@/types";
+import { DrizzleWhere, ResProdi } from "@/types";
+import { filterColumn } from "@/common/filter-column";
 
 export abstract class UnitService {
   static async getAll(query: UnitQuery) {
-    const data = await db.select().from(unit);
-    return { data, success: true };
+    const { flagStatus, name, code, company, per_page, operator } = query;
+
+    const expressions: (SQL<unknown> | undefined)[] = [
+      flagStatus
+        ? filterColumn({
+            column: unit.flagStatus,
+            value: flagStatus,
+          })
+        : undefined,
+      name
+        ? filterColumn({
+            column: unit.name,
+            value: name,
+          })
+        : undefined,
+      code
+        ? filterColumn({
+            column: unit.code,
+            value: code,
+          })
+        : undefined,
+      company
+        ? filterColumn({
+            column: unit.company,
+            value: company,
+          })
+        : undefined,
+    ];
+
+    const where: DrizzleWhere<UnitSelect> =
+      !operator || operator === "and"
+        ? and(...expressions)
+        : or(...expressions);
+
+    const data = await db.select().from(unit).where(where);
+    return { data, success: true, message: "Berhasil mendapatkan data unit" };
   }
 
   static async find(unitCode: string) {
@@ -18,7 +58,7 @@ export abstract class UnitService {
     });
 
     if (!data) {
-      return {  
+      return {
         success: false,
         status: 404,
       };
@@ -50,7 +90,10 @@ export abstract class UnitService {
 
   static async edit(unitCode: string, payload: Partial<UnitBase>) {
     try {
-      const [isExist] = await db.select().from(unit).where(eq(unit.code, unitCode));
+      const [isExist] = await db
+        .select()
+        .from(unit)
+        .where(eq(unit.code, unitCode));
       if (!isExist) {
         return { success: false, status: 404 };
       }
@@ -69,7 +112,10 @@ export abstract class UnitService {
   }
 
   static async delete(unitCode: string) {
-    const [data] = await db.delete(unit).where(eq(unit.code, unitCode)).returning();
+    const [data] = await db
+      .delete(unit)
+      .where(eq(unit.code, unitCode))
+      .returning();
 
     if (!data) throw notFound();
     return { data, success: true };
@@ -115,7 +161,7 @@ export abstract class UnitService {
             name: item.namaProdi,
             code: item.kodeProdi,
             company: item.namaFakultas,
-            flag_status: "1",
+            flagStatus: "1",
           })
           .returning();
       }
