@@ -169,6 +169,17 @@ export abstract class BillService {
   }
 
   static async edit(billNumber: number, payload: BillBase) {
+    if (
+      payload.flagStatus &&
+      !["01", "02", "88"].includes(payload.flagStatus)
+    ) {
+      return {
+        success: false,
+        status: 400,
+        message: "Flag status tidak valid",
+      };
+    }
+
     try {
       const existingBill = await db
         .select()
@@ -186,7 +197,8 @@ export abstract class BillService {
       if (
         existingBill[0].amount === payload.amount &&
         existingBill[0].dueDate?.toString() ==
-          payload.dueDate?.toISOString().split("T")[0]
+          payload.dueDate?.toISOString().split("T")[0] &&
+        existingBill[0].flagStatus === payload.flagStatus
       ) {
         return {
           success: true,
@@ -202,7 +214,7 @@ export abstract class BillService {
           dueDate: payload.dueDate
             ? payload.dueDate.toISOString().split("T")[0]
             : null,
-          flagStatus: payload.dueDate ? "88" : "01",
+          flagStatus: payload.flagStatus as "88" | "01" | "02",
         })
         .where(eq(bills.billNumber, billNumber))
         .returning();
@@ -227,13 +239,6 @@ export abstract class BillService {
       : undefined;
     tokenJurnal = tokenJurnal ? decodeURIComponent(tokenJurnal) : undefined;
 
-
-    if (!tokenJurnal) {
-      tokenJurnal = await generateTokenJurnal();
-    }
-    if (!tokenMultibank) {
-      tokenMultibank = await refreshTokenMultibank();
-    }
     try {
       const existingBill = await db
         .select()
@@ -267,13 +272,6 @@ export abstract class BillService {
         return this.delete(billNumber, tokenJurnal, new_token);
       }
 
-      if (!multibankResponse.ok) {
-        console.error("Terdapat Kesalahan pada Get Multibank di Bills Service");
-        return internalServerErrorResponse(
-          `Internal Server Error: ${multibankResponse.statusText}`
-        );
-      }
-
       const multibankData = await multibankResponse.json();
 
       if (!multibankData.success) {
@@ -295,6 +293,13 @@ export abstract class BillService {
           success: true,
           message: `Data tagihan ${billNumber} berhasil dihapus`,
         };
+      }
+
+      if (!tokenJurnal) {
+        tokenJurnal = await generateTokenJurnal();
+      }
+      if (!tokenMultibank) {
+        tokenMultibank = await refreshTokenMultibank();
       }
 
       const resDeleteMultibank = await fetch(
@@ -513,7 +518,10 @@ export abstract class BillService {
 
     if (!resDataMultibank.ok && resDataMultibank.status != 404) {
       await toggleStatusConfirmed(billNumber);
-      console.error("Terdapat Kesalahan pada Get Multibank di Bills Service", resDataMultibank);
+      console.error(
+        "Terdapat Kesalahan pada Get Multibank di Bills Service",
+        resDataMultibank
+      );
       return internalServerErrorResponse(
         `Internal Server Error: ${resDataMultibank.statusText}`
       );
@@ -525,9 +533,6 @@ export abstract class BillService {
     switch (resBillMultibank.success) {
       case true: {
         // Jika ada dueDate otomatis status Hold
-        if (dueDate) {
-          bill.flagStatus = "88";
-        }
 
         const formDataEditMultibank = new FormData();
         formDataEditMultibank.append("amount", amount ? String(amount) : "");
@@ -754,13 +759,13 @@ export abstract class BillService {
   static async publishMany(payload: { billNumber: number }[]) {
     try {
       const billNumbers = payload.map((bill) => bill.billNumber);
-      
+
       // Cek apakah semua tagihan ada
       const existingBills = await db
         .select({
           billNumber: bills.billNumber,
           isConfirmed: bills.isConfirmed,
-          flagStatus: bills.flagStatus
+          flagStatus: bills.flagStatus,
         })
         .from(bills)
         .where(inArray(bills.billNumber, billNumbers));
@@ -788,36 +793,40 @@ export abstract class BillService {
       );
 
       // Update flag status menjadi "01" (aktif) untuk tagihan yang bisa diupdate
-      const updatedBills = billsToUpdate.length > 0 
-        ? await db
-            .update(bills)
-            .set({ 
-              flagStatus: "01",
-            })
-            .where(inArray(
-              bills.billNumber, 
-              billsToUpdate.map(bill => bill.billNumber)
-            ))
-            .returning({
-              billNumber: bills.billNumber
-            })
-        : [];
+      const updatedBills =
+        billsToUpdate.length > 0
+          ? await db
+              .update(bills)
+              .set({
+                flagStatus: "01",
+              })
+              .where(
+                inArray(
+                  bills.billNumber,
+                  billsToUpdate.map((bill) => bill.billNumber)
+                )
+              )
+              .returning({
+                billNumber: bills.billNumber,
+              })
+          : [];
 
-        for (const bill of billsToUpdate) {
-          await toggleStatusConfirmed(bill.billNumber, false);
-        }
+      for (const bill of billsToUpdate) {
+        await toggleStatusConfirmed(bill.billNumber, false);
+      }
 
       return {
         success: true,
         message: `Berhasil mempublikasikan ${updatedBills.length} tagihan`,
         data: {
-          updated: updatedBills.map(bill => bill.billNumber),
+          updated: updatedBills.map((bill) => bill.billNumber),
           skipped: {
-            alreadyPublished: alreadyPublishedBills.map(bill => bill.billNumber),
-          }
-        }
+            alreadyPublished: alreadyPublishedBills.map(
+              (bill) => bill.billNumber
+            ),
+          },
+        },
       };
-
     } catch (error) {
       console.error("Error publishing bills:", error);
       throw unprocessable(error);
@@ -827,13 +836,13 @@ export abstract class BillService {
   static async paymentMany(payload: { billNumber: number }[]) {
     try {
       const billNumbers = payload.map((bill) => bill.billNumber);
-      
+
       // Cek apakah semua tagihan ada
       const existingBills = await db
         .select({
           billNumber: bills.billNumber,
           isConfirmed: bills.isConfirmed,
-          flagStatus: bills.flagStatus
+          flagStatus: bills.flagStatus,
         })
         .from(bills)
         .where(inArray(bills.billNumber, billNumbers));
@@ -868,34 +877,36 @@ export abstract class BillService {
 
       // console.log(billsToUpdate, alreadyPaidBills, invalidBills);
       // Update flag status menjadi "02" (sudah dibayar) untuk tagihan yang aktif
-      const updatedBills = billsToUpdate.length > 0 
-        ? await db
-            .update(bills)
-            .set({ 
-              flagStatus: "02",
-            })
-            .where(inArray(
-              bills.billNumber, 
-              billsToUpdate.map(bill => bill.billNumber)
-            ))
-            .returning({
-              billNumber: bills.billNumber
-            })
-      : [];
+      const updatedBills =
+        billsToUpdate.length > 0
+          ? await db
+              .update(bills)
+              .set({
+                flagStatus: "02",
+              })
+              .where(
+                inArray(
+                  bills.billNumber,
+                  billsToUpdate.map((bill) => bill.billNumber)
+                )
+              )
+              .returning({
+                billNumber: bills.billNumber,
+              })
+          : [];
 
       return {
         success: true,
         message: `Berhasil mengubah status ${updatedBills.length} tagihan menjadi sudah dibayar`,
         data: {
-          updated: updatedBills.map(bill => bill.billNumber),
+          updated: updatedBills.map((bill) => bill.billNumber),
           skipped: {
-            alreadyPaid: alreadyPaidBills.map(bill => bill.billNumber),
-            onHold: onHoldBills.map(bill => bill.billNumber),
-            notConfirmed: unConfirmedBills.map(bill => bill.billNumber)
-          }
-        }
+            alreadyPaid: alreadyPaidBills.map((bill) => bill.billNumber),
+            onHold: onHoldBills.map((bill) => bill.billNumber),
+            notConfirmed: unConfirmedBills.map((bill) => bill.billNumber),
+          },
+        },
       };
-
     } catch (error) {
       console.error("Error updating payment status:", error);
       throw unprocessable(error);

@@ -39,6 +39,7 @@ export type BillReturn = Static<typeof billReturn>;
 export const billBase = t.Object({
   amount: t.Optional(t.Number()),
   dueDate: t.Nullable(t.Date()),
+  flagStatus: t.Optional(t.String()),
 });
 
 export type BillBase = Static<typeof billBase>;
