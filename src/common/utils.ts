@@ -142,3 +142,7 @@ export const generateTokenJurnal = async () => {
 
   return result.token;
 };
+
+export const generateDescriptionJurnal = async () => {
+  
+}

@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import { bills } from "@/db/schema";
+import { env } from "bun";
 import { eq } from "drizzle-orm";
 
 export const toggleStatusConfirmed = async (
@@ -42,4 +43,22 @@ export function internalServerErrorResponse(message: string) {
     status: 500,
     message,
   };
+}
+
+export async function getPicProdi(kodeProdi: string) {
+  const res = await fetch(
+    `${env.SIAKAD_API_URL}/as400/programstudi/${kodeProdi}`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    }
+  );
+
+  if (!res.ok) {
+    return null;
+  }
+  const result = await res.json();
+  return result.isi[0].namaFakultas;
 }

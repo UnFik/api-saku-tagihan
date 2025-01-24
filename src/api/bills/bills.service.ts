@@ -18,6 +18,7 @@ import { DrizzleWhere, ResponseService } from "@/types";
 import { BillConfirm } from "./bills.schema";
 import { env } from "bun";
 import {
+  getPicProdi,
   internalServerErrorResponse,
   notFoundResponse,
   toggleStatusConfirmed,
@@ -473,6 +474,7 @@ export abstract class BillService {
         .select({
           billIssueId: bills.billIssueId,
           billGroupId: bills.billGroupId,
+          billIssue: bills.billIssue,
           amount: bills.amount,
           identityNumber: bills.identityNumber,
           semester: bills.semester,
@@ -481,6 +483,7 @@ export abstract class BillService {
           dueDate: bills.dueDate,
           unitCode: bills.unitCode,
           isConfirm: bills.isConfirmed,
+          typeServiceId: bills.serviceTypeId,
         })
         .from(bills)
         .where(eq(bills.billNumber, billNumber));
@@ -596,14 +599,34 @@ export abstract class BillService {
 
           amountJurnal = Math.abs(amountJurnal);
 
+          let picProdi: string = await getPicProdi(bill.unitCode);
+          let kodeUnit: string;
+
+          if (!picProdi) {
+            const [unitJurnal] = await db
+              .select()
+              .from(unit)
+              .where(eq(unit.code, bill.unitCode));
+
+            picProdi = unitJurnal.name;
+            kodeUnit = unitJurnal.code;
+          } else {
+            const [unitJurnal] = await db
+              .select()
+              .from(unit)
+              .where(eq(unit.name, picProdi));
+
+            kodeUnit = unitJurnal.code;
+          }
+
           const formJurnal = {
             tanggal: tanggalJurnal,
             idTransaksi: isPositive ? 1 : 45,
             noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
             jumlah: amountJurnal,
-            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber}`,
-            pic: "Admin Fakultas",
-            kodeUnit: bill.unitCode,
+            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
+            pic: picProdi,
+            kodeUnit: kodeUnit,
           };
 
           const resJurnal = await fetch(`${env.JURNAL_API_URL}/create-jurnal`, {
@@ -619,8 +642,11 @@ export abstract class BillService {
           if (resJurnal.status == 401 || !resJurnal.ok) {
             await toggleStatusConfirmed(billNumber);
 
-            const new_token = await generateTokenJurnal();
-            return this.confirm({ billNumber: billNumber }, new_token);
+            return {
+              status: 400,
+              success: false,
+              message: "Gagal konfirmasi tagihan pada API Jurnal",
+            };
           }
 
           const dataJurnal = await resJurnal.json();
@@ -657,15 +683,17 @@ export abstract class BillService {
         }
 
         case false: {
-          const formDataMultibank = new FormData();
-          formDataMultibank.append("bill_issue_id", String(bill.billIssueId));
-          formDataMultibank.append("bill_group_id", String(bill.billGroupId));
-          formDataMultibank.append("amount", String(bill.amount));
-          formDataMultibank.append("nim", bill.identityNumber);
-          formDataMultibank.append("semester", String(bill.semester));
-          formDataMultibank.append("name", bill.name);
-          formDataMultibank.append("flag_status", String(bill.flagStatus));
-          formDataMultibank.append("due_date", bill.dueDate ? bill.dueDate : "");
+          // Ubah dari FormData ke objek JSON langsung
+          const multibankPayload = {
+            bill_issue_id: String(bill.billIssueId),
+            bill_group_id: String(bill.billGroupId),
+            amount: String(bill.amount),
+            nim: bill.identityNumber,
+            semester: String(bill.semester),
+            name: bill.name,
+            flag_status: String(bill.flagStatus),
+            due_date: bill.dueDate ? bill.dueDate : "",
+          };
 
           const resMultibank = await fetch(`${env.MULTIBANK_API_URL}/tagihan`, {
             method: "POST",
@@ -674,7 +702,7 @@ export abstract class BillService {
               Authorization: `Bearer ${tokenMultibank}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(formDataMultibank),
+            body: JSON.stringify(multibankPayload), // Kirim objek JSON langsung
           });
 
           if (resMultibank.status == 401) {
@@ -695,25 +723,61 @@ export abstract class BillService {
           }
 
           try {
+            let picProdi: string = await getPicProdi(bill.unitCode);
+            let kodeUnit: string;
+
+            if (!picProdi) {
+              const [unitJurnal] = await db
+                .select()
+                .from(unit)
+                .where(eq(unit.code, bill.unitCode));
+
+              if (!unitJurnal) {
+                await toggleStatusConfirmed(billNumber);
+
+                console.log(
+                  `Unit ${bill.unitCode} tidak ditemukan di database`
+                );
+                return {
+                  status: 400,
+                  success: false,
+                  message: "Gagal konfirmasi tagihan pada API Jurnal",
+                };
+              }
+
+              picProdi = unitJurnal.name;
+              kodeUnit = unitJurnal.code;
+            } else {
+              const [unitJurnal] = await db
+                .select()
+                .from(unit)
+                .where(eq(unit.name, picProdi));
+
+              kodeUnit = unitJurnal.code;
+            }
+
             const dataJurnal = {
               tanggal: tanggalJurnal,
               idTransaksi: 1,
               noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
               jumlah: bill.amount,
-              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber}`,
-              pic: "Admin Fakultas",
-              kodeUnit: bill.unitCode,
+              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
+              pic: picProdi,
+              kodeUnit: kodeUnit,
             };
 
-            const resJurnal = await fetch(`${env.JURNAL_API_URL}/create-jurnal`, {
-              method: "POST",
-              headers: {
-                Accept: "application/json",
-                Authorization: `Bearer ${tokenJurnal}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(dataJurnal),
-            });
+            const resJurnal = await fetch(
+              `${env.JURNAL_API_URL}/create-jurnal`,
+              {
+                method: "POST",
+                headers: {
+                  Accept: "application/json",
+                  Authorization: `Bearer ${tokenJurnal}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify(dataJurnal),
+              }
+            );
 
             if (resJurnal.status == 401 || !resJurnal.ok) {
               await toggleStatusConfirmed(billNumber);
