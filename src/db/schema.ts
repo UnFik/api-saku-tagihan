@@ -129,3 +129,17 @@ export const serviceTypes = pgTable("service_types", {
     .notNull()
     .$onUpdate(() => new Date()),
 });
+
+export const activationPeriods = pgTable("activation_periods", {
+  id: serial("id").primaryKey().notNull(),
+
+  semester: varchar("semester", { length: 255 }).notNull(),
+  start_date: date("start_date"),
+  end_date: date("end_date"),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updateAt: timestamp("update_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});

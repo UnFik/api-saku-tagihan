@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { users, serviceTypes, unit } from "./schema";
+import { users, serviceTypes, unit, activationPeriods } from "./schema";
 import bcrypt from "bcrypt";
 import { is } from "drizzle-orm";
 const db = drizzle(process.env.DATABASE_URL!);
@@ -368,6 +368,10 @@ async function main() {
       createdAt: users.createdAt,
       updateAt: users.updateAt,
     });
+
+  const activationPeriod = await db.insert(activationPeriods).values({
+    semester: "121",
+  });
 
   console.log(user, "Pengguna Berhasil ditambahkan");
 
