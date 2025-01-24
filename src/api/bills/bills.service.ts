@@ -451,256 +451,156 @@ export abstract class BillService {
     tokenMultibank?: string,
     tokenJurnal?: string
   ): Promise<ResponseService> {
-    const { billNumber, amount, dueDate } = payload;
+    try {
+      const { billNumber, amount, dueDate } = payload;
 
-    const tanggalJurnal = new Date().toISOString().split("T")[0];
+      const tanggalJurnal = new Date().toISOString().split("T")[0];
 
-    tokenMultibank = tokenMultibank
-      ? decodeURIComponent(tokenMultibank)
-      : undefined;
-    tokenJurnal = tokenJurnal ? decodeURIComponent(tokenJurnal) : undefined;
+      tokenMultibank = tokenMultibank
+        ? decodeURIComponent(tokenMultibank)
+        : undefined;
+      tokenJurnal = tokenJurnal ? decodeURIComponent(tokenJurnal) : undefined;
 
-    if (!tokenJurnal) {
-      tokenJurnal = await generateTokenJurnal();
-    }
-    if (!tokenMultibank) {
-      tokenMultibank = await refreshTokenMultibank();
-    }
-
-    // Ambil data tagihan dari database
-    const [bill] = await db
-      .select({
-        billIssueId: bills.billIssueId,
-        billGroupId: bills.billGroupId,
-        amount: bills.amount,
-        identityNumber: bills.identityNumber,
-        semester: bills.semester,
-        name: bills.name,
-        flagStatus: bills.flagStatus,
-        dueDate: bills.dueDate,
-        unitCode: bills.unitCode,
-        isConfirm: bills.isConfirmed,
-      })
-      .from(bills)
-      .where(eq(bills.billNumber, billNumber));
-
-    if (!bill) {
-      return notFoundResponse(
-        `Bill Number Tagihan ${billNumber} tidak ditemukan`
-      );
-    }
-
-    if (bill.isConfirm) {
-      return notFoundResponse(
-        `Bill Number Tagihan ${billNumber} sudah dikonfirmasi`
-      );
-    }
-
-    await toggleStatusConfirmed(billNumber);
-
-    const resDataMultibank = await fetch(
-      `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${tokenMultibank}`,
-          "Content-Type": "application/json",
-        },
+      if (!tokenJurnal) {
+        tokenJurnal = await generateTokenJurnal();
       }
-    );
-
-    if (resDataMultibank.status == 401) {
-      await toggleStatusConfirmed(billNumber);
-      const new_token = await refreshTokenMultibank();
-      return this.confirm(payload, new_token);
-    }
-
-    if (!resDataMultibank.ok && resDataMultibank.status != 404) {
-      await toggleStatusConfirmed(billNumber);
-      console.error(
-        "Terdapat Kesalahan pada Get Multibank di Bills Service",
-        resDataMultibank
-      );
-      return internalServerErrorResponse(
-        `Internal Server Error: ${resDataMultibank.statusText}`
-      );
-    }
-
-    const resBillMultibank = await resDataMultibank.json();
-    const billMultibank = resBillMultibank.data;
-
-    switch (resBillMultibank.success) {
-      case true: {
-        const formDataEditMultibank = new FormData();
-        formDataEditMultibank.append("amount", amount ? String(amount) : "");
-        formDataEditMultibank.append(
-          "due_date",
-          dueDate ? String(dueDate) : ""
-        );
-        formDataEditMultibank.append("flag_status", bill.flagStatus);
-
-        const resEditMultibank = await fetch(
-          `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
-          {
-            method: "PUT",
-            headers: {
-              Accept: "application/json",
-              Authorization: `Bearer ${tokenMultibank}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(formDataEditMultibank),
-          }
-        );
-
-        if (resEditMultibank.status == 401) {
-          await toggleStatusConfirmed(billNumber);
-          const new_token = await refreshTokenMultibank();
-          return this.confirm({ billNumber: billNumber }, new_token);
-        }
-
-        const dataMultibank = await resEditMultibank.json();
-        if (!dataMultibank.success) {
-          await toggleStatusConfirmed(billNumber);
-
-          return {
-            status: dataMultibank.status,
-            success: false,
-            message: dataMultibank.message,
-          };
-        }
-
-        await db
-          .update(bills)
-          .set({ flagStatus: bill.flagStatus })
-          .where(eq(bills.billNumber, billNumber));
-
-        let amountJurnal: number | undefined = amount
-          ? amount - billMultibank.amount
-          : undefined;
-
-        if (!amountJurnal) {
-          return {
-            data: {
-              nim: bill.identityNumber,
-              name: bill.name,
-            },
-            success: true,
-            status: 200,
-            message: "Data Tenggat Tagihan berhasil dikonfirmasi",
-          };
-        }
-
-        const isPositive = amountJurnal > 0;
-
-        amountJurnal = Math.abs(amountJurnal);
-
-        const formJurnal = {
-          tanggal: tanggalJurnal,
-          idTransaksi: isPositive ? 1 : 45,
-          noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
-          jumlah: amountJurnal,
-          keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber}`,
-          pic: "Admin Fakultas",
-          kodeUnit: bill.unitCode,
-        };
-
-        const resJurnal = await fetch(`${env.JURNAL_API_URL}/create-jurnal`, {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${tokenJurnal}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(formJurnal),
-        });
-
-        if (resJurnal.status == 401 || !resJurnal.ok) {
-          await toggleStatusConfirmed(billNumber);
-
-          const new_token = await generateTokenJurnal();
-          return this.confirm({ billNumber: billNumber }, new_token);
-        }
-
-        const dataJurnal = await resJurnal.json();
-
-        if (dataJurnal.message != "success") {
-          await toggleStatusConfirmed(billNumber);
-
-          return {
-            status: 400,
-            success: false,
-            message: "Gagal konfirmasi tagihan pada API Jurnal",
-          };
-        }
-
-        await db.insert(refJournals).values({
-          id: Number(dataJurnal.id_jurnal),
-          description: formJurnal.keterangan,
-          amount: formJurnal.jumlah,
-          billNumber: billNumber,
-        });
-
-        console.info(`${billNumber} di Edit ke Multibank`);
-
-        return {
-          data: {
-            jurnalId: dataJurnal.id_jurnal,
-            nim: bill.identityNumber,
-            name: bill.name,
-          },
-          status: 200,
-          success: true,
-          message: `Berhasil konfirmasi edit tagihan ${billNumber}`,
-        };
+      if (!tokenMultibank) {
+        tokenMultibank = await refreshTokenMultibank();
       }
 
-      case false: {
-        const formDataMultibank = new FormData();
-        formDataMultibank.append("bill_issue_id", String(bill.billIssueId));
-        formDataMultibank.append("bill_group_id", String(bill.billGroupId));
-        formDataMultibank.append("amount", String(bill.amount));
-        formDataMultibank.append("nim", bill.identityNumber);
-        formDataMultibank.append("semester", String(bill.semester));
-        formDataMultibank.append("name", bill.name);
-        formDataMultibank.append("flag_status", String(bill.flagStatus));
-        formDataMultibank.append("due_date", bill.dueDate ? bill.dueDate : "");
+      // Ambil data tagihan dari database
+      const [bill] = await db
+        .select({
+          billIssueId: bills.billIssueId,
+          billGroupId: bills.billGroupId,
+          amount: bills.amount,
+          identityNumber: bills.identityNumber,
+          semester: bills.semester,
+          name: bills.name,
+          flagStatus: bills.flagStatus,
+          dueDate: bills.dueDate,
+          unitCode: bills.unitCode,
+          isConfirm: bills.isConfirmed,
+        })
+        .from(bills)
+        .where(eq(bills.billNumber, billNumber));
 
-        // return { data: formDataMultibank, status: 200, success: true, message: "Tes" };
+      if (!bill) {
+        return notFoundResponse(
+          `Bill Number Tagihan ${billNumber} tidak ditemukan`
+        );
+      }
 
-        const resMultibank = await fetch(`${env.MULTIBANK_API_URL}/tagihan`, {
-          method: "POST",
+      if (bill.isConfirm) {
+        return notFoundResponse(
+          `Bill Number Tagihan ${billNumber} sudah dikonfirmasi`
+        );
+      }
+
+      await toggleStatusConfirmed(billNumber);
+
+      const resDataMultibank = await fetch(
+        `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
+        {
+          method: "GET",
           headers: {
             Accept: "application/json",
             Authorization: `Bearer ${tokenMultibank}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formDataMultibank),
-        });
-
-        if (resMultibank.status == 401) {
-          await toggleStatusConfirmed(billNumber);
-          const new_token = await refreshTokenMultibank();
-          return this.confirm({ billNumber: billNumber }, new_token);
         }
+      );
 
-        const dataMultibank = await resMultibank.json();
-        if (!dataMultibank.success) {
-          await toggleStatusConfirmed(billNumber);
+      if (resDataMultibank.status == 401) {
+        await toggleStatusConfirmed(billNumber);
+        const new_token = await refreshTokenMultibank();
+        return this.confirm(payload, new_token);
+      }
 
-          return {
-            status: dataMultibank.status,
-            success: false,
-            message: dataMultibank.message,
-          };
-        }
+      if (!resDataMultibank.ok && resDataMultibank.status != 404) {
+        await toggleStatusConfirmed(billNumber);
+        console.error(
+          "Terdapat Kesalahan pada Get Multibank di Bills Service",
+          resDataMultibank
+        );
+        return internalServerErrorResponse(
+          `Internal Server Error: ${resDataMultibank.statusText}`
+        );
+      }
 
-        try {
-          const dataJurnal = {
+      const resBillMultibank = await resDataMultibank.json();
+      const billMultibank = resBillMultibank.data;
+
+      switch (resBillMultibank.success) {
+        case true: {
+          const formDataEditMultibank = new FormData();
+          formDataEditMultibank.append("amount", amount ? String(amount) : "");
+          formDataEditMultibank.append(
+            "due_date",
+            dueDate ? String(dueDate) : ""
+          );
+          formDataEditMultibank.append("flag_status", bill.flagStatus);
+
+          const resEditMultibank = await fetch(
+            `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
+            {
+              method: "PUT",
+              headers: {
+                Accept: "application/json",
+                Authorization: `Bearer ${tokenMultibank}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(formDataEditMultibank),
+            }
+          );
+
+          if (resEditMultibank.status == 401) {
+            await toggleStatusConfirmed(billNumber);
+            const new_token = await refreshTokenMultibank();
+            return this.confirm({ billNumber: billNumber }, new_token);
+          }
+
+          const dataMultibank = await resEditMultibank.json();
+          if (!dataMultibank.success) {
+            await toggleStatusConfirmed(billNumber);
+
+            return {
+              status: dataMultibank.status,
+              success: false,
+              message: dataMultibank.message,
+            };
+          }
+
+          await db
+            .update(bills)
+            .set({ flagStatus: bill.flagStatus })
+            .where(eq(bills.billNumber, billNumber));
+
+          let amountJurnal: number | undefined = amount
+            ? amount - billMultibank.amount
+            : undefined;
+
+          if (!amountJurnal) {
+            return {
+              data: {
+                nim: bill.identityNumber,
+                name: bill.name,
+              },
+              success: true,
+              status: 200,
+              message: "Data Tenggat Tagihan berhasil dikonfirmasi",
+            };
+          }
+
+          const isPositive = amountJurnal > 0;
+
+          amountJurnal = Math.abs(amountJurnal);
+
+          const formJurnal = {
             tanggal: tanggalJurnal,
-            idTransaksi: 1,
+            idTransaksi: isPositive ? 1 : 45,
             noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
-            jumlah: bill.amount,
+            jumlah: amountJurnal,
             keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber}`,
             pic: "Admin Fakultas",
             kodeUnit: bill.unitCode,
@@ -713,7 +613,7 @@ export abstract class BillService {
               Authorization: `Bearer ${tokenJurnal}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(dataJurnal),
+            body: JSON.stringify(formJurnal),
           });
 
           if (resJurnal.status == 401 || !resJurnal.ok) {
@@ -723,9 +623,9 @@ export abstract class BillService {
             return this.confirm({ billNumber: billNumber }, new_token);
           }
 
-          const data = await resJurnal.json();
+          const dataJurnal = await resJurnal.json();
 
-          if (data.message != "success") {
+          if (dataJurnal.message != "success") {
             await toggleStatusConfirmed(billNumber);
 
             return {
@@ -736,35 +636,138 @@ export abstract class BillService {
           }
 
           await db.insert(refJournals).values({
-            id: Number(data.id_jurnal),
-            description: dataJurnal.keterangan,
-            amount: dataJurnal.jumlah,
+            id: Number(dataJurnal.id_jurnal),
+            description: formJurnal.keterangan,
+            amount: formJurnal.jumlah,
             billNumber: billNumber,
           });
 
-          console.info(`${billNumber} di Tambah ke Multibank`);
+          console.info(`${billNumber} di Edit ke Multibank`);
+
           return {
             data: {
-              jurnalId: data.jurnalId,
+              jurnalId: dataJurnal.id_jurnal,
               nim: bill.identityNumber,
               name: bill.name,
             },
             status: 200,
             success: true,
-            message: `Berhasil konfirmasi tambah tagihan ${billNumber}`,
+            message: `Berhasil konfirmasi edit tagihan ${billNumber}`,
           };
-        } catch (error) {
-          console.error(error);
-          throw unprocessable(error);
+        }
+
+        case false: {
+          const formDataMultibank = new FormData();
+          formDataMultibank.append("bill_issue_id", String(bill.billIssueId));
+          formDataMultibank.append("bill_group_id", String(bill.billGroupId));
+          formDataMultibank.append("amount", String(bill.amount));
+          formDataMultibank.append("nim", bill.identityNumber);
+          formDataMultibank.append("semester", String(bill.semester));
+          formDataMultibank.append("name", bill.name);
+          formDataMultibank.append("flag_status", String(bill.flagStatus));
+          formDataMultibank.append("due_date", bill.dueDate ? bill.dueDate : "");
+
+          const resMultibank = await fetch(`${env.MULTIBANK_API_URL}/tagihan`, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${tokenMultibank}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(formDataMultibank),
+          });
+
+          if (resMultibank.status == 401) {
+            await toggleStatusConfirmed(billNumber);
+            const new_token = await refreshTokenMultibank();
+            return this.confirm({ billNumber: billNumber }, new_token);
+          }
+
+          const dataMultibank = await resMultibank.json();
+          if (!dataMultibank.success) {
+            await toggleStatusConfirmed(billNumber);
+
+            return {
+              status: dataMultibank.status,
+              success: false,
+              message: dataMultibank.message,
+            };
+          }
+
+          try {
+            const dataJurnal = {
+              tanggal: tanggalJurnal,
+              idTransaksi: 1,
+              noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
+              jumlah: bill.amount,
+              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber}`,
+              pic: "Admin Fakultas",
+              kodeUnit: bill.unitCode,
+            };
+
+            const resJurnal = await fetch(`${env.JURNAL_API_URL}/create-jurnal`, {
+              method: "POST",
+              headers: {
+                Accept: "application/json",
+                Authorization: `Bearer ${tokenJurnal}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(dataJurnal),
+            });
+
+            if (resJurnal.status == 401 || !resJurnal.ok) {
+              await toggleStatusConfirmed(billNumber);
+
+              const new_token = await generateTokenJurnal();
+              return this.confirm({ billNumber: billNumber }, new_token);
+            }
+
+            const data = await resJurnal.json();
+
+            if (data.message != "success") {
+              await toggleStatusConfirmed(billNumber);
+
+              return {
+                status: 400,
+                success: false,
+                message: "Gagal konfirmasi tagihan pada API Jurnal",
+              };
+            }
+
+            await db.insert(refJournals).values({
+              id: Number(data.id_jurnal),
+              description: dataJurnal.keterangan,
+              amount: dataJurnal.jumlah,
+              billNumber: billNumber,
+            });
+
+            console.info(`${billNumber} di Tambah ke Multibank`);
+            return {
+              data: {
+                jurnalId: data.jurnalId,
+                nim: bill.identityNumber,
+                name: bill.name,
+              },
+              status: 200,
+              success: true,
+              message: `Berhasil konfirmasi tambah tagihan ${billNumber}`,
+            };
+          } catch (error) {
+            console.error(error);
+            throw unprocessable(error);
+          }
+        }
+        default: {
+          return {
+            success: false,
+            status: 400,
+            message: "Response tidak valid dari Multibank",
+          };
         }
       }
-      default: {
-        return {
-          success: false,
-          status: 400,
-          message: "Response tidak valid dari Multibank",
-        };
-      }
+    } catch (error) {
+      console.error("Error confirming bills:", error);
+      throw unprocessable(error);
     }
   }
 
