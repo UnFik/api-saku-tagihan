@@ -8,12 +8,10 @@ import {
   date,
   bigint,
   boolean,
-  json,
 } from "drizzle-orm/pg-core";
 
 export const flagBillEnum = pgEnum("flag_status_bill", ["88", "01", "02"]); // 88 = hold, 01 = process, 02 = paid
 export const typeServiceEnum = pgEnum("type_service", ["1", "2", "3"]); // 1 = Layanan Pendidikan, 2 = Layanan Pendidikan Lainnya, 3 = Layanan Non Pendidikan
-export const flagUnitEnum = pgEnum("flag_unit", ["1", "2"]); // 1 = Prodi, 2 = Unit Bisnis
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey().notNull(),
@@ -47,8 +45,7 @@ export const bills = pgTable("bills", {
   paidDate: date("paid_date"),
 
   unitCode: varchar("unit_code", { length: 255 })
-    .notNull()
-    .references(() => unit.code),
+    .notNull(), // Not referenced because some of unit comes to siakad api
   serviceTypeId: integer("service_type_id")
     .notNull()
     .references(() => serviceTypes.id),
@@ -60,12 +57,25 @@ export const bills = pgTable("bills", {
     .$onUpdate(() => new Date()),
 });
 
+export const refJournals = pgTable("ref_journals", {
+  id: integer("id").primaryKey().notNull(), // Not Auto Generated, Id from Journal ID when created
+  description: varchar("description", { length: 255 }).notNull(),
+  amount: integer("amount").notNull(),
+  billNumber: integer("bill_number")
+    .notNull()
+    .references(() => bills.billNumber),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updateAt: timestamp("update_at")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
 export const unit = pgTable("unit", {
-  id: serial("id").primaryKey().notNull(),
+  code: varchar("code", { length: 255 }).notNull().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  code: varchar("code", { length: 255 }).notNull().unique(),
-  company: varchar("company", { length: 255 }).notNull(),
-  flagStatus: flagUnitEnum("flag_unit").notNull(),
+  abbreviation: varchar("abbreviation", { length: 255 }).notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updateAt: timestamp("update_at")

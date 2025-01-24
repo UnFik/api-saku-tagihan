@@ -22,16 +22,10 @@ const unitController = new Elysia({
     (app) =>
       app
         .resolve(getAuthUserId)
-        .get(
-          "",
-          async ({ query }) => {
-            const data = await UnitService.getAll(query);
-            return data;
-          },
-          {
-            query: unitQuery,
-          }
-        )
+        .get("", async ({ headers }) => {
+          const data = await UnitService.getAll(headers.tokenjurnal);
+          return data;
+        })
         .post(
           "",
           async ({ body, set }) => {
@@ -60,7 +54,7 @@ const unitController = new Elysia({
         )
         .put(
           "/:unitCode",
-          async ({ params: {unitCode }, body, set }) => {
+          async ({ params: { unitCode }, body, set }) => {
             const data = await UnitService.edit(unitCode, body);
             set.status = 200;
             if (!data.success) {
@@ -69,24 +63,24 @@ const unitController = new Elysia({
             return data;
           },
           {
-            params: t.Object({unitCode: t.String() }),
+            params: t.Object({ unitCode: t.String() }),
             body: t.Partial(unitBase),
           }
         )
         .delete(
           "/:unitCode",
-          async ({ params: {unitCode }, set }) => {
+          async ({ params: { unitCode }, set }) => {
             const data = await UnitService.delete(unitCode);
             set.status = 200;
             return data;
           },
-          { params: t.Object({unitCode: t.String() }) }
+          { params: t.Object({ unitCode: t.String() }) }
         )
-        .post("sync", async ({ set }) => {
-          const data = await UnitService.sync();
-          set.status = 200;
-          return data;
-        })
+        // .post("sync", async ({ set }) => {
+        //   const data = await UnitService.sync();
+        //   set.status = 200;
+        //   return data;
+        // })
   );
 
 export default unitController;

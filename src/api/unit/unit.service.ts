@@ -7,49 +7,21 @@ import type {
   UnitQuery,
   UnitSelect,
 } from "./unit.schema";
-import { notFound, unprocessable } from "@/common/utils";
+import { generateTokenJurnal, notFound, unprocessable } from "@/common/utils";
 import { env } from "bun";
-import { DrizzleWhere, ResProdi } from "@/types";
+import { DrizzleWhere, ResponseService, ResProdi } from "@/types";
 import { filterColumn } from "@/common/filter-column";
 
 export abstract class UnitService {
-  static async getAll(query: UnitQuery) {
-    const { flagStatus, name, code, company, per_page, operator } = query;
+  static async getAll(tokenJurnal?: string): Promise<ResponseService> {
+    const data = await db.select().from(unit);
 
-    const expressions: (SQL<unknown> | undefined)[] = [
-      flagStatus
-        ? filterColumn({
-            column: unit.flagStatus,
-            value: flagStatus,
-          })
-        : undefined,
-      name
-        ? filterColumn({
-            column: unit.name,
-            value: name,
-          })
-        : undefined,
-      code
-        ? filterColumn({
-            column: unit.code,
-            value: code,
-          })
-        : undefined,
-      company
-        ? filterColumn({
-            column: unit.company,
-            value: company,
-          })
-        : undefined,
-    ];
-
-    const where: DrizzleWhere<UnitSelect> =
-      !operator || operator === "and"
-        ? and(...expressions)
-        : or(...expressions);
-
-    const data = await db.select().from(unit).where(where);
-    return { data, success: true, message: "Berhasil mendapatkan data unit" };
+    return {
+      status: 200,
+      success: true,
+      message: "Berhasil mendapatkan data unit",
+      data,
+    };
   }
 
   static async find(unitCode: string) {
@@ -121,58 +93,58 @@ export abstract class UnitService {
     return { data, success: true };
   }
 
-  static async sync() {
-    const response = await fetch(
-      `${env.SIAKAD_API_URL}/as400/programstudi/All`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-        },
-      }
-    );
+  // static async sync() {
+  //   const response = await fetch(
+  //     `${env.SIAKAD_API_URL}/as400/programstudi/All`,
+  //     {
+  //       method: "GET",
+  //       headers: {
+  //         Accept: "application/json",
+  //       },
+  //     }
+  //   );
 
-    const dataProdi: ResProdi = await response.json();
-    console.log(dataProdi.isi);
-    let dataSync = [];
+  //   const dataProdi: ResProdi = await response.json();
+  //   console.log(dataProdi.isi);
+  //   let dataSync = [];
 
-    for (const item of dataProdi.isi) {
-      const existingUnit = await db.query.unit.findFirst({
-        where: eq(unit.code, item.kodeProdi),
-      });
+  //   for (const item of dataProdi.isi) {
+  //     const existingUnit = await db.query.unit.findFirst({
+  //       where: eq(unit.code, item.kodeProdi),
+  //     });
 
-      let data;
-      if (existingUnit) {
-        // Update existing record
-        [data] = await db
-          .update(unit)
-          .set({
-            name: item.namaProdi,
-            code: item.kodeProdi,
-            company: item.namaFakultas,
-          })
-          .where(eq(unit.code, item.kodeProdi))
-          .returning();
-      } else {
-        // Insert new record
-        [data] = await db
-          .insert(unit)
-          .values({
-            name: item.namaProdi,
-            code: item.kodeProdi,
-            company: item.namaFakultas,
-            flagStatus: "1",
-          })
-          .returning();
-      }
+  //     let data;
+  //     if (existingUnit) {
+  //       // Update existing record
+  //       [data] = await db
+  //         .update(unit)
+  //         .set({
+  //           name: item.namaProdi,
+  //           code: item.kodeProdi,
+  //           company: item.namaFakultas,
+  //         })
+  //         .where(eq(unit.code, item.kodeProdi))
+  //         .returning();
+  //     } else {
+  //       // Insert new record
+  //       [data] = await db
+  //         .insert(unit)
+  //         .values({
+  //           name: item.namaProdi,
+  //           code: item.kodeProdi,
+  //           company: item.namaFakultas,
+  //           flagStatus: "1",
+  //         })
+  //         .returning();
+  //     }
 
-      dataSync.push(data);
-    }
+  //     dataSync.push(data);
+  //   }
 
-    return {
-      success: true,
-      message: "Sinkron data unit berhasil",
-      data: dataSync,
-    };
-  }
+  //   return {
+  //     success: true,
+  //     message: "Sinkron data unit berhasil",
+  //     data: dataSync,
+  //   };
+  // }
 }

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { bills, serviceTypes, unit } from "@/db/schema";
+import { bills, refJournals, serviceTypes, unit } from "@/db/schema";
 import type {
   BillBase,
   BillInsert,
@@ -125,18 +125,18 @@ export abstract class BillService {
   }
 
   static async create(payload: BillInsertWithoutNumber) {
-    const [unitId] = await db
-      .select()
-      .from(unit)
-      .where(eq(unit.code, String(payload.unitCode)));
+    // const [unitId] = await db
+    //   .select()
+    //   .from(unit)
+    //   .where(eq(unit.code, String(payload.unitCode)));
 
-    if (!unitId) {
-      return {
-        success: false,
-        status: 400,
-        message: "Unit tidak ditemukan",
-      };
-    }
+    // if (!unitId) {
+    //   return {
+    //     success: false,
+    //     status: 400,
+    //     message: "Unit tidak ditemukan",
+    //   };
+    // }
 
     const billNumber = parseInt(
       `${payload.identityNumber}${payload.semester}${String(
@@ -144,6 +144,7 @@ export abstract class BillService {
       ).padStart(3, "0")}`
     );
 
+    console.log(billNumber)
     const isExist = await db
       .select()
       .from(bills)
@@ -380,22 +381,22 @@ export abstract class BillService {
   static async createMany(payload: BillInsertWithoutNumber[]) {
     try {
       // Validasi unit untuk setiap tagihan
-      const unitCodes = [...new Set(payload.map((bill) => bill.unitCode))];
-      const units = await db
-        .select()
-        .from(unit)
-        .where(inArray(unit.code, unitCodes));
+      // const unitCodes = [...new Set(payload.map((bill) => bill.unitCode))];
+      // const units = await db
+      //   .select()
+      //   .from(unit)
+      //   .where(inArray(unit.code, unitCodes));
 
-      if (units.length !== unitCodes.length) {
-        return {
-          success: false,
-          status: 400,
-          message: "Beberapa kode unit tidak ditemukan",
-          data: unitCodes.filter(
-            (code) => !units.some((unit) => unit.code === code)
-          ),
-        };
-      }
+      // if (units.length !== unitCodes.length) {
+      //   return {
+      //     success: false,
+      //     status: 400,
+      //     message: "Beberapa kode unit tidak ditemukan",
+      //     data: unitCodes.filter(
+      //       (code) => !units.some((unit) => unit.code === code)
+      //     ),
+      //   };
+      // }
 
       // Validasi nomor tagihan unik
       const billNumbers = payload.map((bill) =>
@@ -532,8 +533,6 @@ export abstract class BillService {
 
     switch (resBillMultibank.success) {
       case true: {
-        // Jika ada dueDate otomatis status Hold
-
         const formDataEditMultibank = new FormData();
         formDataEditMultibank.append("amount", amount ? String(amount) : "");
         formDataEditMultibank.append(
@@ -636,6 +635,13 @@ export abstract class BillService {
           };
         }
 
+        await db.insert(refJournals).values({
+          id: Number(dataJurnal.id_jurnal),
+          description: formJurnal.keterangan,
+          amount: formJurnal.jumlah,
+          billNumber: billNumber,
+        });
+
         console.info(`${billNumber} di Edit ke Multibank`);
 
         return {
@@ -729,6 +735,13 @@ export abstract class BillService {
               message: "Gagal konfirmasi tagihan pada API Jurnal",
             };
           }
+
+          await db.insert(refJournals).values({
+            id: Number(data.id_jurnal),
+            description: dataJurnal.keterangan,
+            amount: dataJurnal.jumlah,
+            billNumber: billNumber,
+          });
 
           console.info(`${billNumber} di Tambah ke Multibank`);
           return {
