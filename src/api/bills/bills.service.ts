@@ -144,7 +144,6 @@ export abstract class BillService {
       ).padStart(3, "0")}`
     );
 
-    console.log(billNumber)
     const isExist = await db
       .select()
       .from(bills)
