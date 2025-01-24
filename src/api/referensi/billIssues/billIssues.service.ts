@@ -11,7 +11,7 @@ import { refreshTokenMultibank } from "@/common/utils";
 import { ResponseService } from "@/types";
 
 export abstract class BillIssueService {
-  static async getAll(token?: string): Promise<void> {
+  static async getAll(token?: string): Promise<ResponseService> {
     if (!token) {
       token = await refreshTokenMultibank();
     }
@@ -134,18 +134,26 @@ export abstract class BillIssueService {
     }
   }
 
-  static async delete(id: number, token?: string): Promise<ResponseService> {
-    if (!token) {
-      token = await refreshTokenMultibank();
+  static async delete(
+    id: number,
+    tokenMultibank?: string
+  ): Promise<ResponseService> {
+    if (!tokenMultibank) {
+      tokenMultibank = await refreshTokenMultibank();
     }
+
+    tokenMultibank = tokenMultibank
+      ? decodeURIComponent(tokenMultibank)
+      : undefined;
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_issue/${id}`, {
         method: "DELETE",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenMultibank}`,
         },
       });
+      console.log(res);
 
       if (res.status == 404) {
         return {
@@ -156,8 +164,11 @@ export abstract class BillIssueService {
       }
 
       if (res.status == 401 || !res.ok) {
-        const new_token = await refreshTokenMultibank();
-        return this.delete(id, new_token);
+        return {
+          status: 401,
+          success: false,
+          message: "Token multibank tidak valid",
+        };
       }
 
       const data = await res.json();

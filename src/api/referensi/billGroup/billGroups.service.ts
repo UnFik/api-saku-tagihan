@@ -6,17 +6,21 @@ import * as Sentry from "@sentry/bun";
 import { ResponseService } from "@/types";
 
 export abstract class BillGroupService {
-  static async getAll(token?: string): Promise<any> {
-    if (!token) {
-      token = await refreshTokenMultibank();
+  static async getAll(tokenMultibank?: string): Promise<ResponseService> {
+    if (!tokenMultibank) {
+      tokenMultibank = await refreshTokenMultibank();
     }
+
+    tokenMultibank = tokenMultibank
+      ? decodeURIComponent(tokenMultibank)
+      : undefined;
 
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_group`, {
         method: "GET",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenMultibank}`,
         },
       });
 
@@ -37,18 +41,22 @@ export abstract class BillGroupService {
 
   static async create(
     billGroupPayload: BillGroupsInsert,
-    token?: string
+    tokenMultibank?: string
   ): Promise<ResponseService> {
-    if (!token) {
-      token = await refreshTokenMultibank();
+    if (!tokenMultibank) {
+      tokenMultibank = await refreshTokenMultibank();
     }
+
+    tokenMultibank = tokenMultibank
+      ? decodeURIComponent(tokenMultibank)
+      : undefined;
 
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_group`, {
         method: "POST",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenMultibank}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(billGroupPayload),
@@ -67,16 +75,24 @@ export abstract class BillGroupService {
     }
   }
 
-  static async find(id: number, token?: string): Promise<ResponseService> {
-    if (!token) {
-      token = await refreshTokenMultibank();
+  static async find(
+    id: number,
+    tokenMultibank?: string
+  ): Promise<ResponseService> {
+    if (!tokenMultibank) {
+      tokenMultibank = await refreshTokenMultibank();
     }
+
+    tokenMultibank = tokenMultibank
+      ? decodeURIComponent(tokenMultibank)
+      : undefined;
+
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_group/${id}`, {
         method: "GET",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenMultibank}`,
         },
       });
 
@@ -102,18 +118,23 @@ export abstract class BillGroupService {
   static async edit(
     id: number,
     billGroupPayload: BillGroupsPayload,
-    token?: string
+    tokenMultibank?: string
   ): Promise<ResponseService> {
-    if (!token) {
-      token = await refreshTokenMultibank();
+    if (!tokenMultibank) {
+      tokenMultibank = await refreshTokenMultibank();
     }
+
+    tokenMultibank = tokenMultibank
+      ? decodeURIComponent(tokenMultibank)
+      : undefined;
+
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_group/${id}`, {
         method: "PUT",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${tokenMultibank}`,
         },
         body: JSON.stringify(billGroupPayload),
       });
@@ -137,18 +158,32 @@ export abstract class BillGroupService {
     }
   }
 
-  static async delete(id: number, token?: string): Promise<ResponseService> {
-    if (!token) {
-      token = await refreshTokenMultibank();
+  static async delete(
+    id: number,
+    tokenMultibank?: string
+  ): Promise<ResponseService> {
+    if (!tokenMultibank) {
+      tokenMultibank = await refreshTokenMultibank();
     }
+
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_group/${id}`, {
         method: "DELETE",
         headers: {
           Accept: "application/json",
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenMultibank}`,
         },
       });
+
+      if (res.status == 500) {
+        return {
+          status: 409,
+          success: false,
+          message: "Bill group masih digunakan",
+          data: null,
+        }
+      }
 
       if (res.status == 404) {
         const data = await res.json();
@@ -156,8 +191,12 @@ export abstract class BillGroupService {
       }
 
       if (res.status == 401 || !res.ok) {
-        const new_token = await refreshTokenMultibank();
-        return this.delete(id, new_token);
+        return {
+          success: false,
+          status: 401,
+          message: "Unauthorized",
+          data: null,
+        };
       }
 
       const data = await res.json();

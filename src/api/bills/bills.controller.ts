@@ -62,7 +62,7 @@ const billsController = new Elysia({
             }
             return data;
           },
-          { params: t.Object({ billNumber: t.Number() }) }
+          { params: t.Object({ billNumber: t.String() }) }
         )
         .delete(
           "/:billNumber",
@@ -83,7 +83,7 @@ const billsController = new Elysia({
             }
             return data;
           },
-          { params: t.Object({ billNumber: t.Number() }) }
+          { params: t.Object({ billNumber: t.String() }) }
         )
         .put(
           "/:billNumber",
@@ -96,7 +96,7 @@ const billsController = new Elysia({
             return data;
           },
           {
-            params: t.Object({ billNumber: t.Number() }),
+            params: t.Object({ billNumber: t.String() }),
             body: billBase,
           }
         )
@@ -147,7 +147,7 @@ const billsController = new Elysia({
           },
           {
             body: t.Object({
-              billNumbers: t.Array(t.Number()),
+              billNumbers: t.Array(t.String()),
             }),
           }
         )
@@ -166,7 +166,7 @@ const billsController = new Elysia({
           },
           {
             body: t.Object({
-              billNumbers: t.Array(t.Number()),
+              billNumbers: t.Array(t.String()),
             }),
           }
         )

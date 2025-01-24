@@ -2,14 +2,16 @@ import { db } from "@/db";
 import { bills, refJournals, serviceTypes, unit } from "@/db/schema";
 import type {
   BillBase,
-  BillInsert,
   BillInsertWithoutNumber,
   BillQuery,
   BillSelect,
 } from "./bills.schema";
 import {
   generateTokenJurnal,
+  internalServerErrorResponse,
+  notFoundResponse,
   refreshTokenMultibank,
+  unauthorizedResponse,
   unprocessable,
 } from "@/common/utils";
 import { eq, and, or, type SQL, inArray } from "drizzle-orm";
@@ -17,12 +19,8 @@ import { filterColumn } from "@/common/filter-column";
 import { DrizzleWhere, ResponseService } from "@/types";
 import { BillConfirm } from "./bills.schema";
 import { env } from "bun";
-import {
-  getPicProdi,
-  internalServerErrorResponse,
-  notFoundResponse,
-  toggleStatusConfirmed,
-} from "./bills.utils";
+import { getPicProdi, toggleStatusConfirmed } from "./bills.utils";
+
 export abstract class BillService {
   static async getAll(query: BillQuery) {
     const {
@@ -105,7 +103,7 @@ export abstract class BillService {
     };
   }
 
-  static async find(billNumber: number) {
+  static async find(billNumber: string) {
     const data = await db
       .select()
       .from(bills)
@@ -126,24 +124,9 @@ export abstract class BillService {
   }
 
   static async create(payload: BillInsertWithoutNumber) {
-    // const [unitId] = await db
-    //   .select()
-    //   .from(unit)
-    //   .where(eq(unit.code, String(payload.unitCode)));
-
-    // if (!unitId) {
-    //   return {
-    //     success: false,
-    //     status: 400,
-    //     message: "Unit tidak ditemukan",
-    //   };
-    // }
-
-    const billNumber = parseInt(
-      `${payload.identityNumber}${payload.semester}${String(
-        payload.billGroupId
-      ).padStart(3, "0")}`
-    );
+    const billNumber = `${payload.identityNumber}${payload.semester}${String(
+      payload.billGroupId
+    ).padStart(3, "0")}`;
 
     const isExist = await db
       .select()
@@ -169,7 +152,7 @@ export abstract class BillService {
     };
   }
 
-  static async edit(billNumber: number, payload: BillBase) {
+  static async edit(billNumber: string, payload: BillBase) {
     if (
       payload.flagStatus &&
       !["01", "02", "88"].includes(payload.flagStatus)
@@ -231,7 +214,7 @@ export abstract class BillService {
   }
 
   static async delete(
-    billNumber: number,
+    billNumber: string,
     tokenMultibank?: string,
     tokenJurnal?: string
   ): Promise<ResponseService> {
@@ -315,8 +298,7 @@ export abstract class BillService {
       );
 
       if (resDeleteMultibank.status == 401) {
-        const new_token = await refreshTokenMultibank();
-        return this.confirm({ billNumber: billNumber }, new_token);
+        return unauthorizedResponse("Token Multibank tidak valid");
       }
 
       const jurnalResponse = await fetch(
@@ -379,32 +361,13 @@ export abstract class BillService {
 
   static async createMany(payload: BillInsertWithoutNumber[]) {
     try {
-      // Validasi unit untuk setiap tagihan
-      // const unitCodes = [...new Set(payload.map((bill) => bill.unitCode))];
-      // const units = await db
-      //   .select()
-      //   .from(unit)
-      //   .where(inArray(unit.code, unitCodes));
-
-      // if (units.length !== unitCodes.length) {
-      //   return {
-      //     success: false,
-      //     status: 400,
-      //     message: "Beberapa kode unit tidak ditemukan",
-      //     data: unitCodes.filter(
-      //       (code) => !units.some((unit) => unit.code === code)
-      //     ),
-      //   };
-      // }
-
       // Validasi nomor tagihan unik
-      const billNumbers = payload.map((bill) =>
-        parseInt(
+      const billNumbers = payload.map(
+        (bill) =>
           `${bill.identityNumber}${bill.semester}${bill.billGroupId.padStart(
             3,
             "0"
           )}`
-        )
       );
       const existingBills = await db
         .select()
@@ -426,11 +389,9 @@ export abstract class BillService {
         .values(
           payload.map((bill) => ({
             ...bill,
-            billNumber: parseInt(
-              `${bill.identityNumber}${
-                bill.semester
-              }${bill.billGroupId.padStart(3, "0")}`
-            ),
+            billNumber: `${bill.identityNumber}${
+              bill.semester
+            }${bill.billGroupId.padStart(3, "0")}`,
           }))
         )
         .returning();
@@ -557,8 +518,8 @@ export abstract class BillService {
 
           if (resEditMultibank.status == 401) {
             await toggleStatusConfirmed(billNumber);
-            const new_token = await refreshTokenMultibank();
-            return this.confirm({ billNumber: billNumber }, new_token);
+
+            return unauthorizedResponse("Token Multibank telah kadaluarsa");
           }
 
           const dataMultibank = await resEditMultibank.json();
@@ -600,11 +561,23 @@ export abstract class BillService {
           let picProdi: string = await getPicProdi(bill.unitCode);
           let kodeUnit: string;
 
+          console.log(picProdi, bill.unitCode);
           if (!picProdi) {
             const [unitJurnal] = await db
               .select()
               .from(unit)
               .where(eq(unit.code, bill.unitCode));
+
+            if (!unitJurnal) {
+              await toggleStatusConfirmed(billNumber);
+
+              console.log(`Unit ${bill.unitCode} tidak ditemukan di database`);
+              return {
+                status: 400,
+                success: false,
+                message: "Gagal konfirmasi tagihan pada API Jurnal",
+              };
+            }
 
             picProdi = unitJurnal.name;
             kodeUnit = unitJurnal.code;
@@ -613,6 +586,8 @@ export abstract class BillService {
               .select()
               .from(unit)
               .where(eq(unit.name, picProdi));
+
+            console.log(unitJurnal);
 
             kodeUnit = unitJurnal.code;
           }
@@ -637,6 +612,8 @@ export abstract class BillService {
             body: JSON.stringify(formJurnal),
           });
 
+          console.log(resJurnal);
+
           if (resJurnal.status == 401 || !resJurnal.ok) {
             await toggleStatusConfirmed(billNumber);
 
@@ -660,7 +637,7 @@ export abstract class BillService {
           }
 
           await db.insert(refJournals).values({
-            id: Number(dataJurnal.id_jurnal),
+            journalId: Number(dataJurnal.id_jurnal),
             description: formJurnal.keterangan,
             amount: formJurnal.jumlah,
             billNumber: billNumber,
@@ -724,6 +701,7 @@ export abstract class BillService {
             let picProdi: string = await getPicProdi(bill.unitCode);
             let kodeUnit: string;
 
+            console.log(picProdi, bill.unitCode);
             if (!picProdi) {
               const [unitJurnal] = await db
                 .select()
@@ -780,8 +758,9 @@ export abstract class BillService {
             if (resJurnal.status == 401 || !resJurnal.ok) {
               await toggleStatusConfirmed(billNumber);
 
-              const new_token = await generateTokenJurnal();
-              return this.confirm({ billNumber: billNumber }, new_token);
+              return unauthorizedResponse(
+                "Gagal konfirmasi tagihan pada API Jurnal"
+              );
             }
 
             const data = await resJurnal.json();
@@ -797,10 +776,10 @@ export abstract class BillService {
             }
 
             await db.insert(refJournals).values({
-              id: Number(data.id_jurnal),
               description: dataJurnal.keterangan,
               amount: dataJurnal.jumlah,
               billNumber: billNumber,
+              journalId: Number(data.id_jurnal),
             });
 
             console.info(`${billNumber} di Tambah ke Multibank`);
@@ -829,11 +808,12 @@ export abstract class BillService {
       }
     } catch (error) {
       console.error("Error confirming bills:", error);
+      await toggleStatusConfirmed(payload.billNumber);
       throw unprocessable(error);
     }
   }
 
-  static async publishMany(payload: { billNumber: number }[]) {
+  static async publishMany(payload: { billNumber: string }[]) {
     try {
       const billNumbers = payload.map((bill) => bill.billNumber);
 
@@ -910,7 +890,7 @@ export abstract class BillService {
     }
   }
 
-  static async paymentMany(payload: { billNumber: number }[]) {
+  static async paymentMany(payload: { billNumber: string }[]) {
     try {
       const billNumbers = payload.map((bill) => bill.billNumber);
 

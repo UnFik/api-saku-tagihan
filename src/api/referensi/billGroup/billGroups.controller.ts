@@ -29,6 +29,16 @@ const billGroupsController = new Elysia({
           const data = await BillGroupService.getAll(
             multibank.value || headers.multibank
           );
+
+          if (data.success) {
+            return {
+              success: true,
+              status: data.status,
+              message: data.message,
+              data: data.data.reverse(),
+            }
+          }
+          
           return data;
         })
         .post(

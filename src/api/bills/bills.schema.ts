@@ -14,14 +14,14 @@ export type BillSelect = Static<typeof billSelect>;
 export const billConfirm = t.Object({
   amount: t.Optional(t.Number()),
   dueDate: t.Optional(t.Nullable(t.String())),
-  billNumber: t.Number(),
+  billNumber: t.String(),
 });
 
 export type BillConfirm = Static<typeof billConfirm>;
 
 export const billReturn = t.Object({
   bill_issue_id: t.Number(),
-  bill_number: t.Number(),
+  bill_number: t.String(),
   amount: t.Number(),
   nim: t.String(),
   semester: t.Number(),

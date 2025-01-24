@@ -24,6 +24,14 @@ const billIssuesController = new Elysia({
         .resolve(getAuthUserId)
         .get("", async ({ headers, cookie: { multibank } }) => {
           const data = await BillIssueService.getAll(multibank.value || headers.multibank);
+          if (data.success) {
+            return {
+              success: true,
+              status: data.status,
+              message: data.message,
+              data: data.data.reverse(),
+            }
+          }
           return data;
         })
         .post(

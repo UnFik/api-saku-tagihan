@@ -4,7 +4,7 @@ import { env } from "bun";
 import { eq } from "drizzle-orm";
 
 export const toggleStatusConfirmed = async (
-  billNumber: number,
+  billNumber: string,
   isConfirmed?: boolean
 ) => {
   const [bill] = await db
@@ -28,22 +28,6 @@ export const toggleStatusConfirmed = async (
 
   return true;
 };
-
-export function notFoundResponse(message: string) {
-  return {
-    success: false,
-    status: 404,
-    message,
-  };
-}
-
-export function internalServerErrorResponse(message: string) {
-  return {
-    success: false,
-    status: 500,
-    message,
-  };
-}
 
 export async function getPicProdi(kodeProdi: string) {
   const res = await fetch(

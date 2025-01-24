@@ -138,11 +138,33 @@ export const generateTokenJurnal = async () => {
   }
   const result = await res.json();
 
-  console.log('token jurnal refreshed ', result.token);
+  console.log("token jurnal refreshed ", result.token);
 
   return result.token;
 };
 
-export const generateDescriptionJurnal = async () => {
-  
+export function notFoundResponse(message: string) {
+  return {
+    success: false,
+    status: 404,
+    message,
+  };
 }
+
+export function internalServerErrorResponse(message: string) {
+  return {
+    success: false,
+    status: 500,
+    message,
+  };
+}
+
+export function unauthorizedResponse(message: string, src?: string) {
+  return {
+    success: false,
+    status: 401,
+    message: `${message} ${src ? `dari ${src}` : ""}`,
+  };
+}
+
+export const generateDescriptionJurnal = async () => {};

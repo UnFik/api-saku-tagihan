@@ -29,7 +29,7 @@ export const users = pgTable("users", {
 export const bills = pgTable("bills", {
   id: serial("id").primaryKey().notNull(),
 
-  billNumber: bigint("bill_number", { mode: "number" }).notNull().unique(),
+  billNumber: varchar("bill_number", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   semester: integer("semester"),
   identityNumber: varchar("identity_number", { length: 255 }).notNull(),
@@ -44,8 +44,7 @@ export const bills = pgTable("bills", {
 
   paidDate: date("paid_date"),
 
-  unitCode: varchar("unit_code", { length: 255 })
-    .notNull(), // Not referenced because some of unit comes to siakad api
+  unitCode: varchar("unit_code", { length: 255 }).notNull(), // Not referenced because some of unit comes to siakad api
   serviceTypeId: integer("service_type_id")
     .notNull()
     .references(() => serviceTypes.id),
@@ -58,12 +57,13 @@ export const bills = pgTable("bills", {
 });
 
 export const refJournals = pgTable("ref_journals", {
-  id: integer("id").primaryKey().notNull(), // Not Auto Generated, Id from Journal ID when created
+  id: serial("id").primaryKey().notNull(),
   description: varchar("description", { length: 255 }).notNull(),
   amount: integer("amount").notNull(),
-  billNumber: integer("bill_number")
+  billNumber: varchar("bill_number", { length: 255 })
     .notNull()
-    .references(() => bills.billNumber),
+    .references(() => bills.billNumber, { onDelete: "cascade" }),
+  journalId: integer("journal_id").notNull(),
 
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updateAt: timestamp("update_at")
