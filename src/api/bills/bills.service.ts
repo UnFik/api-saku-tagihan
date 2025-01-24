@@ -238,7 +238,6 @@ export abstract class BillService {
     tokenMultibank = tokenMultibank
       ? decodeURIComponent(tokenMultibank)
       : undefined;
-    tokenJurnal = tokenJurnal ? decodeURIComponent(tokenJurnal) : undefined;
 
     try {
       const existingBill = await db
@@ -460,7 +459,6 @@ export abstract class BillService {
       tokenMultibank = tokenMultibank
         ? decodeURIComponent(tokenMultibank)
         : undefined;
-      tokenJurnal = tokenJurnal ? decodeURIComponent(tokenJurnal) : undefined;
 
       if (!tokenJurnal) {
         tokenJurnal = await generateTokenJurnal();
