@@ -561,7 +561,6 @@ export abstract class BillService {
           let picProdi: string = await getPicProdi(bill.unitCode);
           let kodeUnit: string;
 
-          console.log(picProdi, bill.unitCode);
           if (!picProdi) {
             const [unitJurnal] = await db
               .select()
@@ -587,7 +586,7 @@ export abstract class BillService {
               .from(unit)
               .where(eq(unit.name, picProdi));
 
-            console.log(unitJurnal);
+            (unitJurnal);
 
             kodeUnit = unitJurnal.code;
           }
@@ -612,7 +611,6 @@ export abstract class BillService {
             body: JSON.stringify(formJurnal),
           });
 
-          console.log(resJurnal);
 
           if (resJurnal.status == 401 || !resJurnal.ok) {
             await toggleStatusConfirmed(billNumber);
@@ -701,7 +699,6 @@ export abstract class BillService {
             let picProdi: string = await getPicProdi(bill.unitCode);
             let kodeUnit: string;
 
-            console.log(picProdi, bill.unitCode);
             if (!picProdi) {
               const [unitJurnal] = await db
                 .select()
