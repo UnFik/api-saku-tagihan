@@ -40,8 +40,11 @@ const billsController = new Elysia({
         )
         .post(
           "",
-          async ({ body, set }) => {
-            const data = await BillService.create(body);
+          async ({ body, set, cookie: { multibank }, headers }) => {
+            const data = await BillService.create(
+              body,
+              multibank.value ?? headers.multibank
+            );
             set.status = 201;
             if (!data.success) {
               set.status = data.status;
@@ -75,7 +78,7 @@ const billsController = new Elysia({
             const data = await BillService.delete(
               billNumber,
               multibank.value ?? headers.multibank,
-              tokenjurnal.value ?? headers.tokenJurnal
+              tokenjurnal.value ?? headers.tokenjurnal
             );
             set.status = 200;
             if (!data.success) {
@@ -116,11 +119,16 @@ const billsController = new Elysia({
         )
         .post(
           "/confirm",
-          async ({ body, set, headers, cookie: { multibank, tokenjurnal } }) => {
+          async ({
+            body,
+            set,
+            headers,
+            cookie: { multibank, tokenjurnal },
+          }) => {
             const data = await BillService.confirm(
               body,
-              multibank.value ??  headers.multibank,
-              tokenjurnal.value ?? headers.tokenjurnal 
+              multibank.value ?? headers.multibank,
+              tokenjurnal.value ?? headers.tokenjurnal
             );
             set.status = 200;
             if (!data.success) {

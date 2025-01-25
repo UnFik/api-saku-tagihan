@@ -41,6 +41,7 @@ export const bills = pgTable("bills", {
   billIssue: varchar("bill_issue", { length: 255 }).notNull(),
   billIssueId: varchar("bill_issue_id", { length: 255 }).notNull(),
   billGroupId: varchar("bill_group_id", { length: 255 }).notNull(),
+  major: varchar("major", { length: 255 }),
 
   paidDate: date("paid_date"),
 

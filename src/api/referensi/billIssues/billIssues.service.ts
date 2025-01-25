@@ -39,7 +39,7 @@ export abstract class BillIssueService {
     }
   }
 
-  static async find(id: number, token?: string): Promise<void> {
+  static async find(id: number, token?: string): Promise<ResponseService> {
     if (!token) {
       token = await refreshTokenMultibank();
     }
