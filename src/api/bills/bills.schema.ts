@@ -50,6 +50,7 @@ export type BillPayload = Static<typeof billPayload>;
 export const billQuery = t.Object({
   semester: t.Optional(t.String()),
   unitCode: t.Optional(t.String()),
+  major: t.Optional(t.String()),
   billIssueId: t.Optional(t.String()),
   serviceTypeId: t.Optional(t.String()),
   operator: t.Optional(t.Enum({ and: "and", or: "or" })),

@@ -30,6 +30,7 @@ export abstract class BillService {
       billIssueId,
       serviceTypeId,
       per_page,
+      major,
       operator,
     } = query;
 
@@ -56,6 +57,12 @@ export abstract class BillService {
         ? filterColumn({
             column: bills.serviceTypeId,
             value: serviceTypeId,
+          })
+        : undefined,
+      major
+        ? filterColumn({
+            column: bills.major,
+            value: major,
           })
         : undefined,
     ];
@@ -334,7 +341,6 @@ export abstract class BillService {
       }
 
       if (!resDeleteMultibank.ok) {
-
         // Status di multibank sudah paid atau selesai, hanya hapus dari saku
         if (resDeleteMultibank.status == 405) {
           await db
@@ -444,7 +450,7 @@ export abstract class BillService {
       for (let bill of payload) {
         if (
           bill.serviceTypeId == 1 &&
-          String(bill.semester) < activationPeriod.semester
+          Number(bill.semester) < Number(activationPeriod.semester)
         ) {
           bill.dueDate = resBillIssue.data.end_date;
         }
@@ -659,7 +665,8 @@ export abstract class BillService {
               return {
                 status: 400,
                 success: false,
-                message: "Gagal konfirmasi tagihan pada API Jurnal, Unit Tidak ditemukan",
+                message:
+                  "Gagal konfirmasi tagihan pada API Jurnal, Unit Tidak ditemukan",
               };
             }
 
@@ -702,7 +709,8 @@ export abstract class BillService {
             return {
               status: 400,
               success: false,
-              message: "Gagal konfirmasi tagihan pada API Jurnal, Token Invalid",
+              message:
+                "Gagal konfirmasi tagihan pada API Jurnal, Token Invalid",
             };
           }
 
