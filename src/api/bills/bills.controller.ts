@@ -105,8 +105,8 @@ const billsController = new Elysia({
         )
         .post(
           "/batch",
-          async ({ body, set }) => {
-            const data = await BillService.createMany(body);
+          async ({ body, set, headers }) => {
+            const data = await BillService.createMany(body, headers.multibank);
             set.status = 201;
             if (!data.success) {
               set.status = data.status;

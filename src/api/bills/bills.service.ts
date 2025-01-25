@@ -135,8 +135,9 @@ export abstract class BillService {
   static async create(
     payload: BillInsertWithoutNumber,
     tokenMultibank?: string
-  ) {
-    const activationPeriod = await db.query.activationPeriods.findFirst();
+  ):  Promise<ResponseService> {
+    try {
+      const activationPeriod = await db.query.activationPeriods.findFirst();
     if (!activationPeriod) {
       return {
         status: 500,
@@ -191,9 +192,19 @@ export abstract class BillService {
 
     return {
       data: data[0],
+      status: 200,
       success: true,
       message: "Berhasil membuat tagihan",
     };
+    } catch (error) {
+      console.error(error);
+      return {
+        success: false,
+        status: 500,
+        message: "Terdapat kesalahan pada server.",
+      }
+    }
+    
   }
 
   static async edit(billNumber: string, payload: BillBase) {
@@ -423,7 +434,7 @@ export abstract class BillService {
     }
   }
 
-  static async createMany(payload: BillInsertWithoutNumber[]) {
+  static async createMany(payload: BillInsertWithoutNumber[], tokenMultibank?: String) {
     try {
       const activationPeriod = await db.query.activationPeriods.findFirst();
       if (!activationPeriod) {
@@ -434,15 +445,29 @@ export abstract class BillService {
         };
       }
 
-      const resBillIssue = await BillIssueService.find(
-        Number(payload[0].billIssueId)
-      );
+      const res = await fetch(`${env.MULTIBANK_API_URL}/bill_issue/${payload[0].billIssueId}`, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${tokenMultibank}`,
+        },
+      });
 
-      if (!resBillIssue.success) {
+      if (res.status == 401) {
+          return {
+            status: 401,
+            success: false,
+            message: "Token Multibank tidak valid.",
+          };
+      }
+
+      const dataBillIssue = await res.json();
+
+      if (!res.ok) {
         return {
           success: false,
           status: 400,
-          message: `Terdapat masalah pada Bill Issue untuk, Bill Issue tidak ditemukan`,
+          message: `Terdapat masalah pada Multibank, Bill Issue tidak ditemukan`,
         };
       }
 
@@ -452,7 +477,7 @@ export abstract class BillService {
           bill.serviceTypeId == 1 &&
           Number(bill.semester) < Number(activationPeriod.semester)
         ) {
-          bill.dueDate = resBillIssue.data.end_date;
+          bill.dueDate = dataBillIssue.data.end_date;
         }
       }
 
