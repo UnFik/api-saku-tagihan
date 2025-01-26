@@ -14,13 +14,12 @@ export async function getAuthUserId({
       const tokenCookie = `${cookieAuthorization.value}`;
       payload = await jwt.verify(tokenCookie);
     }
-
+    
     if (!payload) {
       throw unauthorized();
     }
   }
-
-  return { userId: payload.id.toString(), token };
+  return { userId: payload.id.toString(), name: payload.name.toString(), token };
 }
 
 export function invalid(cause?: any) {

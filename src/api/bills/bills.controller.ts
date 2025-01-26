@@ -5,6 +5,7 @@ import { BillService } from "./bills.service";
 import {
   billBase,
   billConfirm,
+  billConfirmAllPayload,
   billInsert,
   billInsertWithoutNumber,
   billQuery,
@@ -176,6 +177,31 @@ const billsController = new Elysia({
             body: t.Object({
               billNumbers: t.Array(t.String()),
             }),
+          }
+        )
+        .post(
+          "/confirm/batch",
+          async ({
+            set,
+            name,
+            query,
+            headers,
+            cookie: { multibank, tokenjurnal },
+          }) => {
+            const data = await BillService.confirmAll(
+              name,
+              query,
+              multibank.value ?? headers.multibank,
+              tokenjurnal.value ?? headers.tokenjurnal
+            );
+            set.status = 200;
+            if (!data.success) {
+              set.status = data.status;
+            }
+            return data;
+          }, 
+          {
+            query: billConfirmAllPayload
           }
         )
   );

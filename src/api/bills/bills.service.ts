@@ -1,7 +1,8 @@
 import { db } from "@/db";
-import { bills, refJournals, serviceTypes, unit } from "@/db/schema";
+import { bills, queueTracker, refJournals, serviceTypes, unit } from "@/db/schema";
 import type {
   BillBase,
+  BillConfirmAllPayload,
   BillInsertWithoutNumber,
   BillQuery,
   BillSelect,
@@ -14,7 +15,7 @@ import {
   unauthorizedResponse,
   unprocessable,
 } from "@/common/utils";
-import { eq, and, or, type SQL, inArray } from "drizzle-orm";
+import { eq, and, or, type SQL, inArray, sql } from "drizzle-orm";
 import { filterColumn } from "@/common/filter-column";
 import { DrizzleWhere, ResponseService } from "@/types";
 import { BillConfirm } from "./bills.schema";
@@ -29,7 +30,8 @@ export abstract class BillService {
       unitCode,
       billIssueId,
       serviceTypeId,
-      per_page,
+      per_page = 15,
+      page = 1,
       major,
       operator,
     } = query;
@@ -72,6 +74,15 @@ export abstract class BillService {
         ? and(...expressions)
         : or(...expressions);
 
+    const offset = (page - 1) * per_page;
+
+    // Get total count
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bills)
+      .where(where);
+
+    // Get paginated data
     const data = await db
       .select({
         id: bills.id,
@@ -95,18 +106,114 @@ export abstract class BillService {
           typeServiceId: serviceTypes.typeServiceId,
         },
         unitId: bills.unitCode,
-        unitName: unit.name,
-        unitCode: unit.code,
         createdAt: bills.createdAt,
-        updateAt: bills.updateAt,
+        updatedAt: bills.updateAt,
       })
       .from(bills)
       .leftJoin(unit, eq(unit.code, bills.unitCode))
       .leftJoin(serviceTypes, eq(serviceTypes.id, bills.serviceTypeId))
-      .where(where);
+      .where(where)
+      .limit(Number(per_page))
+      .offset(offset);
+
+    const totalPages = Math.ceil(count / per_page);
+    const baseUrl = `${env.BASE_URL}/api/tagihan-ukt`;
+
+    // Generate base query params from filters
+    const queryParams = new URLSearchParams();
+    if (semester) queryParams.set('semester', semester);
+    if (unitCode) queryParams.set('unitCode', unitCode);
+    if (billIssueId) queryParams.set('billIssueId', String(billIssueId));
+    if (serviceTypeId) queryParams.set('serviceTypeId', String(serviceTypeId));
+    if (major) queryParams.set('major', major);
+    if (operator) queryParams.set('operator', operator);
+
+    // Helper function to generate URL with query params
+    const generateUrl = (pageNum: number | null) => {
+      if (pageNum === null) return null;
+      const params = new URLSearchParams(queryParams);
+      params.set('page', String(pageNum));
+      params.set('per_page', String(per_page));
+      return `${baseUrl}?${params.toString()}`;
+    };
+
+    // Generate pagination links
+    const links = [];
+
+    // Previous page
+    // links.push({
+    //   url: page > 1 ? generateUrl(page - 1) : null,
+    //   label: "&laquo; Previous",
+    //   active: false
+    // });
+
+    // Tentukan range halaman yang akan ditampilkan
+    const range = 5;
+    let startPage = Math.max(1, page - range);
+    let endPage = Math.min(totalPages, page + range);
+
+    // Tambahkan ellipsis di awal jika perlu
+    if (startPage > 1) {
+      links.push({
+        url: generateUrl(1),
+        label: "1",
+        active: false
+      });
+      if (startPage > 2) {
+        links.push({
+          url: null,
+          label: "...",
+          active: false
+        });
+      }
+    }
+
+    // Numbered pages
+    for (let i = startPage; i <= endPage; i++) {
+      links.push({
+        url: generateUrl(i),
+        label: String(i),
+        active: i === page
+      });
+    }
+
+    // Tambahkan ellipsis di akhir jika perlu
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        links.push({
+          url: null,
+          label: "...",
+          active: false
+        });
+      }
+      links.push({
+        url: generateUrl(totalPages),
+        label: String(totalPages),
+        active: false
+      });
+    }
+
+    // Next page
+    // links.push({
+    //   url: page < totalPages ? generateUrl(page + 1) : null,
+    //   label: "Next &raquo;",
+    //   active: false
+    // });
 
     return {
+      current_page: page,
       data,
+      first_page_url: generateUrl(1),
+      from: offset + 1,
+      last_page: totalPages,
+      last_page_url: generateUrl(totalPages),
+      links,
+      next_page_url: page < totalPages ? generateUrl(page + 1) : null,
+      path: baseUrl,
+      per_page: Number(per_page),
+      prev_page_url: page > 1 ? generateUrl(page - 1) : null,
+      to: Math.min(offset + Number(per_page), count),
+      total: count,
       success: true,
       message: "Berhasil mendapatkan data tagihan",
     };
@@ -390,7 +497,7 @@ export abstract class BillService {
             idTransaksi: 45,
             noBukti: `${data.unitCode}/${data.semester}/${data.identityNumber}`,
             jumlah: data.amount,
-            keterangan: `Tagihan UKT semester ${data.semester} untuk ${data.identityNumber} ${data.billIssue}`,
+            keterangan: `Tagihan UKT semester ${data.semester} untuk ${data.identityNumber} ${data.billIssue} /coba`,
             pic: "Admin Fakultas",
             kodeUnit: data.unitCode,
           }),
@@ -494,20 +601,32 @@ export abstract class BillService {
         .from(bills)
         .where(inArray(bills.billNumber, billNumbers));
 
-      if (existingBills.length > 0) {
+      const existingBillNumbers = new Set(existingBills.map((bill) => bill.billNumber));
+
+      // Filter payload untuk hanya memproses tagihan yang belum ada
+      const newBills = payload.filter(
+        (bill) => !existingBillNumbers.has(
+          `${bill.identityNumber}${bill.semester}${String(bill.billGroupId).padStart(3, "0")}`
+        )
+      );
+
+      if (newBills.length === 0) {
         return {
-          success: false,
-          status: 400,
-          message: "Beberapa nomor tagihan sudah digunakan",
-          data: existingBills.map((bill) => bill.billNumber),
+          success: true,
+          status: 200,
+          message: "Semua tagihan sudah ada sebelumnya",
+          data: {
+            created: [],
+            skipped: existingBills.map((bill) => bill.billNumber)
+          }
         };
       }
 
-      // Insert batch tagihan
+      // Insert batch tagihan baru
       const data = await db
         .insert(bills)
         .values(
-          payload.map((bill) => ({
+          newBills.map((bill) => ({
             ...bill,
             billNumber: `${bill.identityNumber}${bill.semester}${String(
               bill.billGroupId
@@ -517,9 +636,12 @@ export abstract class BillService {
         .returning();
 
       return {
-        data: data.map((bill) => bill.billNumber),
+        data: {
+          created: data.map((bill) => bill.billNumber),
+          skipped: existingBills.map((bill) => bill.billNumber)
+        },
         success: true,
-        message: `Berhasil membuat ${data.length} tagihan`,
+        message: `Berhasil membuat ${data.length} tagihan, melewati ${existingBills.length} tagihan yang sudah ada`,
       };
     } catch (error) {
       console.error("Error creating bills:", error);
@@ -591,8 +713,7 @@ export abstract class BillService {
 
       if (resDataMultibank.status == 401) {
         await toggleStatusConfirmed(billNumber);
-        const new_token = await refreshTokenMultibank();
-        return this.confirm(payload, new_token);
+        unauthorizedResponse('Token Multibank telah kadaluarsa')
       }
 
       if (!resDataMultibank.ok && resDataMultibank.status != 404) {
@@ -713,7 +834,7 @@ export abstract class BillService {
             idTransaksi: isPositive ? 1 : 45,
             noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
             jumlah: amountJurnal,
-            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
+            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue} /coba`,
             pic: picProdi,
             kodeUnit: kodeUnit,
           };
@@ -731,12 +852,7 @@ export abstract class BillService {
           if (resJurnal.status == 401) {
             await toggleStatusConfirmed(billNumber);
 
-            return {
-              status: 400,
-              success: false,
-              message:
-                "Gagal konfirmasi tagihan pada API Jurnal, Token Invalid",
-            };
+            return unauthorizedResponse('Gagal konfirmasi tagihan pada API Jurnal, Token Invalid')
           }
 
           const dataJurnal = await resJurnal.json();
@@ -851,7 +967,7 @@ export abstract class BillService {
               idTransaksi: 1,
               noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
               jumlah: bill.amount,
-              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
+              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue} /coba`,
               pic: picProdi,
               kodeUnit: kodeUnit,
             };
@@ -1082,5 +1198,298 @@ export abstract class BillService {
       console.error("Error updating payment status:", error);
       throw unprocessable(error);
     }
+  }
+
+  static async confirmMany(
+    payload: { billNumber: string }[],
+    tokenMultibank?: string,
+    tokenJurnal?: string
+  ): Promise<ResponseService> {
+    try {
+      const billNumbers = payload.map((bill) => bill.billNumber);
+
+      // Cek apakah semua tagihan ada
+      const existingBills = await db
+        .select({
+          billNumber: bills.billNumber,
+          isConfirmed: bills.isConfirmed,
+        })
+        .from(bills)
+        .where(inArray(bills.billNumber, billNumbers));
+
+      if (existingBills.length !== billNumbers.length) {
+        const foundBillNumbers = existingBills.map((bill) => bill.billNumber);
+        const notFoundBills = billNumbers.filter(
+          (number) => !foundBillNumbers.includes(number)
+        );
+
+        return {
+          success: false,
+          status: 404,
+          message: "Beberapa nomor tagihan tidak ditemukan",
+          data: notFoundBills,
+        };
+      }
+
+      // Pisahkan tagihan berdasarkan statusnya
+      const billsToConfirm = existingBills.filter((bill) => !bill.isConfirmed);
+      const alreadyConfirmedBills = existingBills.filter(
+        (bill) => bill.isConfirmed
+      );
+
+      // Konfirmasi tagihan yang belum dikonfirmasi
+      const confirmedBills = [];
+      const failedBills = [];
+
+      for (const bill of billsToConfirm) {
+        try {
+          const result = await this.confirm(
+            { billNumber: bill.billNumber },
+            tokenMultibank,
+            tokenJurnal
+          );
+
+          if (result.success) {
+            confirmedBills.push(bill.billNumber);
+          } else {
+            failedBills.push({
+              billNumber: bill.billNumber,
+              message: result.message,
+            });
+          }
+        } catch (error) {
+          console.error(`Error confirming bill ${bill.billNumber}:`, error);
+          failedBills.push({
+            billNumber: bill.billNumber,
+            message: "Terjadi kesalahan saat konfirmasi tagihan",
+          });
+        }
+      }
+
+      return {
+        status:200,
+        success: true,
+        message: `Berhasil mengkonfirmasi ${confirmedBills.length} tagihan`,
+        data: {
+          confirmed: confirmedBills,
+          failed: failedBills,
+          skipped: {
+            alreadyConfirmed: alreadyConfirmedBills.map((bill) => bill.billNumber),
+          },
+        },
+      };
+    } catch (error) {
+      console.error("Error confirming multiple bills:", error);
+      throw unprocessable(error);
+    }
+  }
+
+  static async confirmAll(
+    nameUploader: String,
+    payload: BillConfirmAllPayload,
+    tokenMultibank?: string,
+    tokenJurnal?: string
+  ): Promise<ResponseService> {
+    try {
+      const { semester, billIssueId, major, operator } = payload;
+      
+      // Query dan validasi awal sama seperti sebelumnya
+      const expressions: (SQL<unknown> | undefined)[] = [
+        semester ? filterColumn({ column: bills.semester, value: semester }) : undefined,
+        billIssueId ? filterColumn({ column: bills.billIssueId, value: String(billIssueId) }) : undefined,
+        major ? filterColumn({ column: bills.major, value: major }) : undefined,
+        eq(bills.serviceTypeId, 1),
+        eq(bills.isConfirmed, false)
+      ];
+  
+      const where: DrizzleWhere<BillSelect> = !operator || operator === "and" ? and(...expressions) : or(...expressions);
+
+      const unconfirmedBills = await db
+        .select()
+        .from(bills)
+        .where(and(where));
+
+      if (unconfirmedBills.length === 0) {
+        return {
+          success: true,
+          status: 200,
+          message: "Tidak ada tagihan yang perlu dikonfirmasi",
+          data: { confirmed: [], failed: [] },
+        };
+      }
+
+      // Buat record tracking
+      const [queueRecord] = await db.insert(queueTracker).values({
+        semester: semester || null,
+        billIssue: billIssueId ? String(billIssueId) : null,
+        major: major || null,
+        createdBy: String(nameUploader),
+        totalData: unconfirmedBills.length,
+        status: "PROCESSING",
+        description: `Konfirmasi tagihan massal${semester ? ` semester ${semester}` : ''}${major ? ` jurusan ${major}` : ''}${billIssueId ? ` bill issue ${billIssueId}` : ''}`
+      }).returning();
+
+      // Proses queue di background
+      this.processQueue(unconfirmedBills, queueRecord.id, tokenMultibank, tokenJurnal).catch(error => {
+        console.error('Background queue processing error:', error);
+      });
+
+      // Return response segera
+      return {
+        status: 200,
+        success: true,
+        message: `Memulai proses konfirmasi ${unconfirmedBills.length} tagihan di background`,
+        data: {
+          queueId: queueRecord.id,
+          totalData: unconfirmedBills.length,
+          filters: { semester, billIssueId, major, operator }
+        }
+      };
+
+    } catch (error) {
+      const errId = Math.random().toString(36).substring(2, 7);
+      console.error("Error confirming all bills:", error, `ID: ${errId}`);
+      return internalServerErrorResponse(`Terdapat kesalahan pada server: ${errId}`);
+    }
+  }
+
+  // Metode baru untuk memproses queue di background
+  private static async processQueue(
+    bills: any[],
+    queueId: number,
+    tokenMultibank?: string,
+    tokenJurnal?: string
+  ) {
+    const queue = new Queue(queueId, 5);
+    const results = {
+      confirmed: [] as string[],
+      failed: [] as { billNumber: string; message: string }[]
+    };
+
+    for (const bill of bills) {
+      queue.add(async () => {
+        try {
+          const result = await this.confirm(
+            { billNumber: bill.billNumber },
+            tokenMultibank,
+            tokenJurnal
+          );
+
+          if (result.success) {
+            results.confirmed.push(bill.billNumber);
+            await db.update(queueTracker)
+              .set({ 
+                successCount: sql`${queueTracker.successCount} + 1`
+              })
+              .where(eq(queueTracker.id, queueId));
+          } else {
+            if (result.status == 401) {
+              tokenMultibank = await refreshTokenMultibank();
+              tokenJurnal = await generateTokenJurnal();
+            }
+            results.failed.push({
+              billNumber: bill.billNumber,
+              message: result.message || "Gagal mengkonfirmasi tagihan"
+            });
+            await db.update(queueTracker)
+              .set({ 
+                failedCount: sql`${queueTracker.failedCount} + 1`
+              })
+              .where(eq(queueTracker.id, queueId));
+          }
+        } catch (error) {
+          console.error(`Error confirming bill ${bill.billNumber}:`, error);
+          results.failed.push({
+            billNumber: bill.billNumber,
+            message: "Terjadi kesalahan saat konfirmasi tagihan"
+          });
+          await db.update(queueTracker)
+            .set({ 
+              failedCount: sql`${queueTracker.failedCount} + 1`
+            })
+            .where(eq(queueTracker.id, queueId));
+        }
+      });
+    }
+
+    await queue.waitComplete();
+
+    // Update status final
+    await db.update(queueTracker)
+      .set({ 
+        status: "COMPLETED",
+      })
+      .where(eq(queueTracker.id, queueId));
+  }
+}
+
+// Implementasi Queue Worker
+class Queue {
+  private concurrency: number;
+  private running: number;
+  private queue: (() => Promise<void>)[];
+  private onComplete: (() => void) | null;
+  private queueId: number;
+
+  constructor(queueId: number, concurrency: number = 5) {
+    this.concurrency = concurrency;
+    this.running = 0;
+    this.queue = [];
+    this.onComplete = null;
+    this.queueId = queueId;
+  }
+
+  async add(task: () => Promise<void>) {
+    this.queue.push(task);
+    await this.updateQueueStatus("PROCESSING");
+    this.next();
+  }
+
+  private async updateQueueStatus(status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED") {
+    try {
+      await db.update(queueTracker)
+        .set({ 
+          status: status,
+          updateAt: new Date()
+        })
+        .where(eq(queueTracker.id, this.queueId));
+    } catch (error) {
+      console.error('Error updating queue status:', error);
+    }
+  }
+
+  private async next() {
+    if (this.running >= this.concurrency || this.queue.length === 0) {
+      if (this.running === 0 && this.onComplete) {
+        await this.updateQueueStatus("COMPLETED");
+        this.onComplete();
+      }
+      return;
+    }
+
+    this.running++;
+    const task = this.queue.shift();
+    
+    if (task) {
+      try {
+        await task();
+      } catch (error) {
+        console.error('Task error:', error);
+        await this.updateQueueStatus("FAILED");
+      }
+      
+      this.running--;
+      this.next();
+    }
+  }
+
+  waitComplete(): Promise<void> {
+    if (this.running === 0 && this.queue.length === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.onComplete = resolve;
+    });
   }
 }

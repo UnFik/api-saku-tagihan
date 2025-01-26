@@ -8,12 +8,9 @@ import { compare } from "bcrypt";
 
 export abstract class UserService {
   static async authenticate(username: string, password: string) {
-    console.log(username,password)
     let user = await db.query.users.findFirst({
       where: eq(users.username, username),
     });
-
-    console.log(user)
 
     if (!user) {
       return undefined;

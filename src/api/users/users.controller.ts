@@ -25,7 +25,7 @@ const usersController = new Elysia()
         };
       }
 
-      const token = await jwt.sign({ id: 123 });
+      const token = await jwt.sign({ id: user.id, name: user.name, username: user.username });
       const tokenMultibank = await generateTokenMultibank();
       const tokenJurnal = await generateTokenJurnal()
 
