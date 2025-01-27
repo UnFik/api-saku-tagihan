@@ -497,7 +497,7 @@ export abstract class BillService {
             idTransaksi: 45,
             noBukti: `${data.unitCode}/${data.semester}/${data.identityNumber}`,
             jumlah: data.amount,
-            keterangan: `Tagihan UKT semester ${data.semester} untuk ${data.identityNumber} ${data.billIssue} /coba`,
+            keterangan: `Tagihan UKT semester ${data.semester} untuk ${data.identityNumber} ${data.billIssue}`,
             pic: "Admin Fakultas",
             kodeUnit: data.unitCode,
           }),
@@ -834,7 +834,7 @@ export abstract class BillService {
             idTransaksi: isPositive ? 1 : 45,
             noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
             jumlah: amountJurnal,
-            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue} /coba`,
+            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
             pic: picProdi,
             kodeUnit: kodeUnit,
           };
@@ -967,7 +967,7 @@ export abstract class BillService {
               idTransaksi: 1,
               noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
               jumlah: bill.amount,
-              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue} /coba`,
+              keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
               pic: picProdi,
               kodeUnit: kodeUnit,
             };
