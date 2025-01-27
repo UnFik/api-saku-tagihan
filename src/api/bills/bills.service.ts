@@ -15,7 +15,7 @@ import {
   unauthorizedResponse,
   unprocessable,
 } from "@/common/utils";
-import { eq, and, or, type SQL, inArray, sql } from "drizzle-orm";
+import { eq, and, or, type SQL, inArray, sql, desc } from "drizzle-orm";
 import { filterColumn } from "@/common/filter-column";
 import { DrizzleWhere, ResponseService } from "@/types";
 import { BillConfirm } from "./bills.schema";
@@ -99,22 +99,16 @@ export abstract class BillService {
         paidDate: bills.paidDate,
         isConfirmed: bills.isConfirmed,
         major: bills.major,
-        serviceType: {
-          id: bills.serviceTypeId,
-          name: serviceTypes.name,
-          type: serviceTypes.type,
-          typeServiceId: serviceTypes.typeServiceId,
-        },
         unitId: bills.unitCode,
         createdAt: bills.createdAt,
         updatedAt: bills.updateAt,
       })
       .from(bills)
       .leftJoin(unit, eq(unit.code, bills.unitCode))
-      .leftJoin(serviceTypes, eq(serviceTypes.id, bills.serviceTypeId))
       .where(where)
       .limit(Number(per_page))
-      .offset(offset);
+      .offset(offset)
+      .orderBy(desc(bills.id));
 
     const totalPages = Math.ceil(count / per_page);
     const baseUrl = `${env.BASE_URL}/api/tagihan-ukt`;
@@ -1361,65 +1355,71 @@ export abstract class BillService {
     tokenJurnal?: string
   ) {
     const queue = new Queue(queueId, 5);
-    const results = {
-      confirmed: [] as string[],
-      failed: [] as { billNumber: string; message: string }[]
-    };
+    let successCount = 0;
+    let failedCount = 0;
+    const BATCH_SIZE = 50;
+
+    let successBatch = [];
+    let failedBatch = [];
 
     for (const bill of bills) {
-      queue.add(async () => {
-        try {
-          const result = await this.confirm(
-            { billNumber: bill.billNumber },
-            tokenMultibank,
-            tokenJurnal
-          );
+        queue.add(async () => {
+            try {
+                const result = await this.confirm(
+                    { billNumber: bill.billNumber },
+                    tokenMultibank,
+                    tokenJurnal
+                );
 
-          if (result.success) {
-            results.confirmed.push(bill.billNumber);
-            await db.update(queueTracker)
-              .set({ 
-                successCount: sql`${queueTracker.successCount} + 1`
-              })
-              .where(eq(queueTracker.id, queueId));
-          } else {
-            if (result.status == 401) {
-              tokenMultibank = await refreshTokenMultibank();
-              tokenJurnal = await generateTokenJurnal();
+                if (result.success) {
+                    successBatch.push(bill.billNumber);
+                } else {
+                    failedBatch.push(bill.billNumber);
+                }
+                
+                // Update database setiap BATCH_SIZE items atau di akhir proses
+                if (successBatch.length >= BATCH_SIZE) {
+                    await db.update(queueTracker)
+                        .set({
+                            successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
+                            failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`
+                        })
+                        .where(eq(queueTracker.id, queueId));
+                    
+                    successCount += successBatch.length;
+                    failedCount += failedBatch.length;
+                    
+                    successBatch = [];
+                    failedBatch = [];
+                }
+            } catch (error) {
+                console.error(`Error confirming bill ${bill.billNumber}:`, error);
+                failedBatch.push(bill.billNumber);
             }
-            results.failed.push({
-              billNumber: bill.billNumber,
-              message: result.message || "Gagal mengkonfirmasi tagihan"
-            });
-            await db.update(queueTracker)
-              .set({ 
-                failedCount: sql`${queueTracker.failedCount} + 1`
-              })
-              .where(eq(queueTracker.id, queueId));
-          }
-        } catch (error) {
-          console.error(`Error confirming bill ${bill.billNumber}:`, error);
-          results.failed.push({
-            billNumber: bill.billNumber,
-            message: "Terjadi kesalahan saat konfirmasi tagihan"
-          });
-          await db.update(queueTracker)
-            .set({ 
-              failedCount: sql`${queueTracker.failedCount} + 1`
-            })
-            .where(eq(queueTracker.id, queueId));
-        }
-      });
+        });
     }
 
     await queue.waitComplete();
 
-    // Update status final
-    await db.update(queueTracker)
-      .set({ 
-        status: "COMPLETED",
-      })
-      .where(eq(queueTracker.id, queueId));
+    // Update sisa data yang belum di-batch
+    if (successBatch.length > 0 || failedBatch.length > 0) {
+        await db.update(queueTracker)
+            .set({
+                successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
+                failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`,
+                status: "COMPLETED",
+                updateAt: new Date()
+            })
+            .where(eq(queueTracker.id, queueId));
+    } else {
+        // Update status final jika tidak ada sisa data
+        await db.update(queueTracker)
+            .set({ 
+                status: "COMPLETED",
+                updateAt: new Date()
+            })
+            .where(eq(queueTracker.id, queueId));
+    }
   }
 }
 
@@ -1430,6 +1430,9 @@ class Queue {
   private queue: (() => Promise<void>)[];
   private onComplete: (() => void) | null;
   private queueId: number;
+  private isShuttingDown = false;
+  private maxRetries = 3;
+  private maxQueueSize = 1000;
 
   constructor(queueId: number, concurrency: number = 5) {
     this.concurrency = concurrency;
@@ -1440,7 +1443,33 @@ class Queue {
   }
 
   async add(task: () => Promise<void>) {
-    this.queue.push(task);
+    if (this.queue.length >= this.maxQueueSize) {
+      await new Promise(resolve => {
+        const checkQueue = () => {
+          if (this.queue.length < this.maxQueueSize) {
+            resolve(true);
+          } else {
+            setTimeout(checkQueue, 100);
+          }
+        };
+        checkQueue();
+      });
+    }
+    
+    const wrappedTask = async (retryCount = 0) => {
+      try {
+        await task();
+      } catch (error) {
+        if (retryCount < this.maxRetries) {
+          console.log(`Retrying task, attempt ${retryCount + 1}`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return wrappedTask(retryCount + 1);
+        }
+        throw error;
+      }
+    };
+    
+    this.queue.push(() => wrappedTask());
     await this.updateQueueStatus("PROCESSING");
     this.next();
   }
@@ -1459,6 +1488,9 @@ class Queue {
   }
 
   private async next() {
+    if (this.isShuttingDown) {
+      return;
+    }
     if (this.running >= this.concurrency || this.queue.length === 0) {
       if (this.running === 0 && this.onComplete) {
         await this.updateQueueStatus("COMPLETED");
@@ -1491,5 +1523,18 @@ class Queue {
     return new Promise((resolve) => {
       this.onComplete = resolve;
     });
+  }
+
+  async shutdown() {
+    this.isShuttingDown = true;
+    console.log('Queue shutting down gracefully...');
+    
+    // Tunggu semua task yang sedang berjalan selesai
+    while (this.running > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    await this.updateQueueStatus("COMPLETED");
+    console.log('Queue shutdown complete');
   }
 }
