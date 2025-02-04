@@ -1,5 +1,11 @@
 import { db } from "@/db";
-import { bills, queueTracker, refJournals, serviceTypes, unit } from "@/db/schema";
+import {
+  bills,
+  queueTracker,
+  refJournals,
+  serviceTypes,
+  unit,
+} from "@/db/schema";
 import type {
   BillBase,
   BillConfirmAllPayload,
@@ -115,19 +121,19 @@ export abstract class BillService {
 
     // Generate base query params from filters
     const queryParams = new URLSearchParams();
-    if (semester) queryParams.set('semester', semester);
-    if (unitCode) queryParams.set('unitCode', unitCode);
-    if (billIssueId) queryParams.set('billIssueId', String(billIssueId));
-    if (serviceTypeId) queryParams.set('serviceTypeId', String(serviceTypeId));
-    if (major) queryParams.set('major', major);
-    if (operator) queryParams.set('operator', operator);
+    if (semester) queryParams.set("semester", semester);
+    if (unitCode) queryParams.set("unitCode", unitCode);
+    if (billIssueId) queryParams.set("billIssueId", String(billIssueId));
+    if (serviceTypeId) queryParams.set("serviceTypeId", String(serviceTypeId));
+    if (major) queryParams.set("major", major);
+    if (operator) queryParams.set("operator", operator);
 
     // Helper function to generate URL with query params
     const generateUrl = (pageNum: number | null) => {
       if (pageNum === null) return null;
       const params = new URLSearchParams(queryParams);
-      params.set('page', String(pageNum));
-      params.set('per_page', String(per_page));
+      params.set("page", String(pageNum));
+      params.set("per_page", String(per_page));
       return `${baseUrl}?${params.toString()}`;
     };
 
@@ -151,13 +157,13 @@ export abstract class BillService {
       links.push({
         url: generateUrl(1),
         label: "1",
-        active: false
+        active: false,
       });
       if (startPage > 2) {
         links.push({
           url: null,
           label: "...",
-          active: false
+          active: false,
         });
       }
     }
@@ -167,7 +173,7 @@ export abstract class BillService {
       links.push({
         url: generateUrl(i),
         label: String(i),
-        active: i === page
+        active: i === page,
       });
     }
 
@@ -177,13 +183,13 @@ export abstract class BillService {
         links.push({
           url: null,
           label: "...",
-          active: false
+          active: false,
         });
       }
       links.push({
         url: generateUrl(totalPages),
         label: String(totalPages),
-        active: false
+        active: false,
       });
     }
 
@@ -236,76 +242,75 @@ export abstract class BillService {
   static async create(
     payload: BillInsertWithoutNumber,
     tokenMultibank?: string
-  ):  Promise<ResponseService> {
+  ): Promise<ResponseService> {
     try {
       const activationPeriod = await db.query.activationPeriods.findFirst();
-    if (!activationPeriod) {
-      return {
-        status: 500,
-        success: false,
-        message: "Terdapat masalah pada data aktivasi server",
-      };
-    }
-
-    if (
-      payload.serviceTypeId == 1 &&
-      Number(payload.semester) < Number(activationPeriod.semester)
-    ) {
-      const res = await BillIssueService.find(
-        Number(payload.billIssueId),
-        tokenMultibank
-      );
-
-      if (!res.success) {
+      if (!activationPeriod) {
         return {
+          status: 500,
           success: false,
-          status: 400,
-          message:
-            "Terdapat masalah pada Bill Issue, Bill Issue tidak ditemukan",
+          message: "Terdapat masalah pada data aktivasi server",
         };
       }
 
-      const endDate = res.data.end_date;
+      if (
+        payload.serviceTypeId == 1 &&
+        Number(payload.semester) < Number(activationPeriod.semester)
+      ) {
+        const res = await BillIssueService.find(
+          Number(payload.billIssueId),
+          tokenMultibank
+        );
 
-      payload.dueDate = endDate;
-    }
+        if (!res.success) {
+          return {
+            success: false,
+            status: 400,
+            message:
+              "Terdapat masalah pada Bill Issue, Bill Issue tidak ditemukan",
+          };
+        }
 
-    const billNumber = `${payload.identityNumber}${payload.semester}${String(
-      payload.billGroupId
-    ).padStart(3, "0")}`;
+        const endDate = res.data.end_date;
 
-    const isExist = await db
-      .select()
-      .from(bills)
-      .where(eq(bills.billNumber, billNumber));
+        payload.dueDate = endDate;
+      }
 
-    if (isExist.length > 0) {
+      const billNumber = `${payload.identityNumber}${payload.semester}${String(
+        payload.billGroupId
+      ).padStart(3, "0")}`;
+
+      const isExist = await db
+        .select()
+        .from(bills)
+        .where(eq(bills.billNumber, billNumber));
+
+      if (isExist.length > 0) {
+        return {
+          success: false,
+          status: 400,
+          message: "Nomor tagihan sudah digunakan",
+        };
+      }
+      const data = await db
+        .insert(bills)
+        .values({ ...payload, billNumber })
+        .returning();
+
       return {
-        success: false,
-        status: 400,
-        message: "Nomor tagihan sudah digunakan",
+        data: data[0],
+        status: 200,
+        success: true,
+        message: "Berhasil membuat tagihan",
       };
-    }
-    const data = await db
-      .insert(bills)
-      .values({ ...payload, billNumber })
-      .returning();
-
-    return {
-      data: data[0],
-      status: 200,
-      success: true,
-      message: "Berhasil membuat tagihan",
-    };
     } catch (error) {
       console.error(error);
       return {
         success: false,
         status: 500,
         message: "Terdapat kesalahan pada server.",
-      }
+      };
     }
-    
   }
 
   static async edit(billNumber: string, payload: BillBase) {
@@ -535,7 +540,10 @@ export abstract class BillService {
     }
   }
 
-  static async createMany(payload: BillInsertWithoutNumber[], tokenMultibank?: String) {
+  static async createMany(
+    payload: BillInsertWithoutNumber[],
+    tokenMultibank?: String
+  ) {
     try {
       const activationPeriod = await db.query.activationPeriods.findFirst();
       if (!activationPeriod) {
@@ -546,20 +554,23 @@ export abstract class BillService {
         };
       }
 
-      const res = await fetch(`${env.MULTIBANK_API_URL}/bill_issue/${payload[0].billIssueId}`, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${tokenMultibank}`,
-        },
-      });
+      const res = await fetch(
+        `${env.MULTIBANK_API_URL}/bill_issue/${payload[0].billIssueId}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${tokenMultibank}`,
+          },
+        }
+      );
 
       if (res.status == 401) {
-          return {
-            status: 401,
-            success: false,
-            message: "Token Multibank tidak valid.",
-          };
+        return {
+          status: 401,
+          success: false,
+          message: "Token Multibank tidak valid.",
+        };
       }
 
       const dataBillIssue = await res.json();
@@ -595,13 +606,18 @@ export abstract class BillService {
         .from(bills)
         .where(inArray(bills.billNumber, billNumbers));
 
-      const existingBillNumbers = new Set(existingBills.map((bill) => bill.billNumber));
+      const existingBillNumbers = new Set(
+        existingBills.map((bill) => bill.billNumber)
+      );
 
       // Filter payload untuk hanya memproses tagihan yang belum ada
       const newBills = payload.filter(
-        (bill) => !existingBillNumbers.has(
-          `${bill.identityNumber}${bill.semester}${String(bill.billGroupId).padStart(3, "0")}`
-        )
+        (bill) =>
+          !existingBillNumbers.has(
+            `${bill.identityNumber}${bill.semester}${String(
+              bill.billGroupId
+            ).padStart(3, "0")}`
+          )
       );
 
       if (newBills.length === 0) {
@@ -611,8 +627,8 @@ export abstract class BillService {
           message: "Semua tagihan sudah ada sebelumnya",
           data: {
             created: [],
-            skipped: existingBills.map((bill) => bill.billNumber)
-          }
+            skipped: existingBills.map((bill) => bill.billNumber),
+          },
         };
       }
 
@@ -632,7 +648,7 @@ export abstract class BillService {
       return {
         data: {
           created: data.map((bill) => bill.billNumber),
-          skipped: existingBills.map((bill) => bill.billNumber)
+          skipped: existingBills.map((bill) => bill.billNumber),
         },
         success: true,
         message: `Berhasil membuat ${data.length} tagihan, melewati ${existingBills.length} tagihan yang sudah ada`,
@@ -707,7 +723,7 @@ export abstract class BillService {
 
       if (resDataMultibank.status == 401) {
         await toggleStatusConfirmed(billNumber);
-        unauthorizedResponse('Token Multibank telah kadaluarsa')
+        unauthorizedResponse("Token Multibank telah kadaluarsa");
       }
 
       if (!resDataMultibank.ok && resDataMultibank.status != 404) {
@@ -726,6 +742,21 @@ export abstract class BillService {
 
       switch (resBillMultibank.success) {
         case true: {
+          if (billMultibank.flag_status == "02") {
+            await db
+              .update(bills)
+              .set({
+                flagStatus: "02",
+                isConfirmed: true,
+              })
+              .where(eq(bills.billNumber, billNumber));
+
+            return {
+              success: true,
+              status: 409,
+              message: "Tagihan sudah lunas",
+            };
+          }
           const formDataEditMultibank = new FormData();
           formDataEditMultibank.append("amount", amount ? String(amount) : "");
           formDataEditMultibank.append(
@@ -846,7 +877,9 @@ export abstract class BillService {
           if (resJurnal.status == 401) {
             await toggleStatusConfirmed(billNumber);
 
-            return unauthorizedResponse('Gagal konfirmasi tagihan pada API Jurnal, Token Invalid')
+            return unauthorizedResponse(
+              "Gagal konfirmasi tagihan pada API Jurnal, Token Invalid"
+            );
           }
 
           const dataJurnal = await resJurnal.json();
@@ -1261,14 +1294,16 @@ export abstract class BillService {
       }
 
       return {
-        status:200,
+        status: 200,
         success: true,
         message: `Berhasil mengkonfirmasi ${confirmedBills.length} tagihan`,
         data: {
           confirmed: confirmedBills,
           failed: failedBills,
           skipped: {
-            alreadyConfirmed: alreadyConfirmedBills.map((bill) => bill.billNumber),
+            alreadyConfirmed: alreadyConfirmedBills.map(
+              (bill) => bill.billNumber
+            ),
           },
         },
       };
@@ -1286,22 +1321,29 @@ export abstract class BillService {
   ): Promise<ResponseService> {
     try {
       const { semester, billIssueId, major, operator } = payload;
-      
+
       // Query dan validasi awal sama seperti sebelumnya
       const expressions: (SQL<unknown> | undefined)[] = [
-        semester ? filterColumn({ column: bills.semester, value: semester }) : undefined,
-        billIssueId ? filterColumn({ column: bills.billIssueId, value: String(billIssueId) }) : undefined,
+        semester
+          ? filterColumn({ column: bills.semester, value: semester })
+          : undefined,
+        billIssueId
+          ? filterColumn({
+              column: bills.billIssueId,
+              value: String(billIssueId),
+            })
+          : undefined,
         major ? filterColumn({ column: bills.major, value: major }) : undefined,
         eq(bills.serviceTypeId, 1),
-        eq(bills.isConfirmed, false)
+        eq(bills.isConfirmed, false),
       ];
-  
-      const where: DrizzleWhere<BillSelect> = !operator || operator === "and" ? and(...expressions) : or(...expressions);
 
-      const unconfirmedBills = await db
-        .select()
-        .from(bills)
-        .where(and(where));
+      const where: DrizzleWhere<BillSelect> =
+        !operator || operator === "and"
+          ? and(...expressions)
+          : or(...expressions);
+
+      const unconfirmedBills = await db.select().from(bills).where(and(where));
 
       if (unconfirmedBills.length === 0) {
         return {
@@ -1313,19 +1355,31 @@ export abstract class BillService {
       }
 
       // Buat record tracking
-      const [queueRecord] = await db.insert(queueTracker).values({
-        semester: semester || null,
-        billIssue: billIssueId ? String(billIssueId) : null,
-        major: major || null,
-        createdBy: String(nameUploader),
-        totalData: unconfirmedBills.length,
-        status: "PROCESSING",
-        description: `Konfirmasi tagihan massal${semester ? ` semester ${semester}` : ''}${major ? ` jurusan ${major}` : ''}${billIssueId ? ` bill issue ${billIssueId}` : ''}`
-      }).returning();
+      const [queueRecord] = await db
+        .insert(queueTracker)
+        .values({
+          semester: semester || null,
+          billIssue: billIssueId ? String(billIssueId) : null,
+          major: major || null,
+          createdBy: String(nameUploader),
+          totalData: unconfirmedBills.length,
+          status: "PROCESSING",
+          description: `Konfirmasi tagihan massal${
+            semester ? ` semester ${semester}` : ""
+          }${major ? ` jurusan ${major}` : ""}${
+            billIssueId ? ` bill issue ${billIssueId}` : ""
+          }`,
+        })
+        .returning();
 
       // Proses queue di background
-      this.processQueue(unconfirmedBills, queueRecord.id, tokenMultibank, tokenJurnal).catch(error => {
-        console.error('Background queue processing error:', error);
+      this.processQueue(
+        unconfirmedBills,
+        queueRecord.id,
+        tokenMultibank,
+        tokenJurnal
+      ).catch((error) => {
+        console.error("Background queue processing error:", error);
       });
 
       // Return response segera
@@ -1336,14 +1390,15 @@ export abstract class BillService {
         data: {
           queueId: queueRecord.id,
           totalData: unconfirmedBills.length,
-          filters: { semester, billIssueId, major, operator }
-        }
+          filters: { semester, billIssueId, major, operator },
+        },
       };
-
     } catch (error) {
       const errId = Math.random().toString(36).substring(2, 7);
       console.error("Error confirming all bills:", error, `ID: ${errId}`);
-      return internalServerErrorResponse(`Terdapat kesalahan pada server: ${errId}`);
+      return internalServerErrorResponse(
+        `Terdapat kesalahan pada server: ${errId}`
+      );
     }
   }
 
@@ -1363,62 +1418,65 @@ export abstract class BillService {
     let failedBatch = [];
 
     for (const bill of bills) {
-        queue.add(async () => {
-            try {
-                const result = await this.confirm(
-                    { billNumber: bill.billNumber },
-                    tokenMultibank,
-                    tokenJurnal
-                );
+      queue.add(async () => {
+        try {
+          const result = await this.confirm(
+            { billNumber: bill.billNumber },
+            tokenMultibank,
+            tokenJurnal
+          );
 
-                if (result.success) {
-                    successBatch.push(bill.billNumber);
-                } else {
-                    failedBatch.push(bill.billNumber);
-                }
-                
-                // Update database setiap BATCH_SIZE items atau di akhir proses
-                if (successBatch.length >= BATCH_SIZE) {
-                    await db.update(queueTracker)
-                        .set({
-                            successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
-                            failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`
-                        })
-                        .where(eq(queueTracker.id, queueId));
-                    
-                    successCount += successBatch.length;
-                    failedCount += failedBatch.length;
-                    
-                    successBatch = [];
-                    failedBatch = [];
-                }
-            } catch (error) {
-                console.error(`Error confirming bill ${bill.billNumber}:`, error);
-                failedBatch.push(bill.billNumber);
-            }
-        });
+          if (result.success) {
+            successBatch.push(bill.billNumber);
+          } else {
+            failedBatch.push(bill.billNumber);
+          }
+
+          // Update database setiap BATCH_SIZE items atau di akhir proses
+          if (successBatch.length >= BATCH_SIZE) {
+            await db
+              .update(queueTracker)
+              .set({
+                successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
+                failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`,
+              })
+              .where(eq(queueTracker.id, queueId));
+
+            successCount += successBatch.length;
+            failedCount += failedBatch.length;
+
+            successBatch = [];
+            failedBatch = [];
+          }
+        } catch (error) {
+          console.error(`Error confirming bill ${bill.billNumber}:`, error);
+          failedBatch.push(bill.billNumber);
+        }
+      });
     }
 
     await queue.waitComplete();
 
     // Update sisa data yang belum di-batch
     if (successBatch.length > 0 || failedBatch.length > 0) {
-        await db.update(queueTracker)
-            .set({
-                successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
-                failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`,
-                status: "COMPLETED",
-                updateAt: new Date()
-            })
-            .where(eq(queueTracker.id, queueId));
+      await db
+        .update(queueTracker)
+        .set({
+          successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
+          failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`,
+          status: "COMPLETED",
+          updateAt: new Date(),
+        })
+        .where(eq(queueTracker.id, queueId));
     } else {
-        // Update status final jika tidak ada sisa data
-        await db.update(queueTracker)
-            .set({ 
-                status: "COMPLETED",
-                updateAt: new Date()
-            })
-            .where(eq(queueTracker.id, queueId));
+      // Update status final jika tidak ada sisa data
+      await db
+        .update(queueTracker)
+        .set({
+          status: "COMPLETED",
+          updateAt: new Date(),
+        })
+        .where(eq(queueTracker.id, queueId));
     }
   }
 }
@@ -1444,7 +1502,7 @@ class Queue {
 
   async add(task: () => Promise<void>) {
     if (this.queue.length >= this.maxQueueSize) {
-      await new Promise(resolve => {
+      await new Promise((resolve) => {
         const checkQueue = () => {
           if (this.queue.length < this.maxQueueSize) {
             resolve(true);
@@ -1455,35 +1513,40 @@ class Queue {
         checkQueue();
       });
     }
-    
+
     const wrappedTask = async (retryCount = 0) => {
       try {
         await task();
       } catch (error) {
         if (retryCount < this.maxRetries) {
           console.log(`Retrying task, attempt ${retryCount + 1}`);
-          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * (retryCount + 1))
+          );
           return wrappedTask(retryCount + 1);
         }
         throw error;
       }
     };
-    
+
     this.queue.push(() => wrappedTask());
     await this.updateQueueStatus("PROCESSING");
     this.next();
   }
 
-  private async updateQueueStatus(status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED") {
+  private async updateQueueStatus(
+    status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+  ) {
     try {
-      await db.update(queueTracker)
-        .set({ 
+      await db
+        .update(queueTracker)
+        .set({
           status: status,
-          updateAt: new Date()
+          updateAt: new Date(),
         })
         .where(eq(queueTracker.id, this.queueId));
     } catch (error) {
-      console.error('Error updating queue status:', error);
+      console.error("Error updating queue status:", error);
     }
   }
 
@@ -1501,15 +1564,15 @@ class Queue {
 
     this.running++;
     const task = this.queue.shift();
-    
+
     if (task) {
       try {
         await task();
       } catch (error) {
-        console.error('Task error:', error);
+        console.error("Task error:", error);
         await this.updateQueueStatus("FAILED");
       }
-      
+
       this.running--;
       this.next();
     }
@@ -1527,14 +1590,14 @@ class Queue {
 
   async shutdown() {
     this.isShuttingDown = true;
-    console.log('Queue shutting down gracefully...');
-    
+    console.log("Queue shutting down gracefully...");
+
     // Tunggu semua task yang sedang berjalan selesai
     while (this.running > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
-    
+
     await this.updateQueueStatus("COMPLETED");
-    console.log('Queue shutdown complete');
+    console.log("Queue shutdown complete");
   }
 }
