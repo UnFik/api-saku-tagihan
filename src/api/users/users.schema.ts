@@ -1,3 +1,8 @@
+export interface User {
+  name: string;
+  username: string;
+  role: string;
+}
 
 export interface AuthSiakad {
   username?: string;

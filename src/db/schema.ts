@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import {
   integer,
   pgTable,
@@ -7,7 +6,6 @@ import {
   serial,
   pgEnum,
   date,
-  bigint,
   boolean,
   text,
 } from "drizzle-orm/pg-core";
@@ -33,7 +31,7 @@ export const bills = pgTable("bills", {
 
   billNumber: varchar("bill_number", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
-  semester: integer("semester"),
+  semester: integer("semester").notNull(),
   identityNumber: varchar("identity_number", { length: 255 }).notNull(),
   amount: integer("amount").notNull(),
   flagStatus: flagBillEnum("flag_status").notNull(),
@@ -147,7 +145,12 @@ export const activationPeriods = pgTable("activation_periods", {
     .$onUpdate(() => new Date()),
 });
 
-export const queueStatusEnum = pgEnum("queue_status", ["PENDING", "PROCESSING", "COMPLETED", "FAILED"]);
+export const queueStatusEnum = pgEnum("queue_status", [
+  "PENDING",
+  "PROCESSING",
+  "COMPLETED",
+  "FAILED",
+]);
 
 export const queueTracker = pgTable("queue_tracker", {
   id: serial("id").primaryKey().notNull(),
@@ -162,8 +165,10 @@ export const queueTracker = pgTable("queue_tracker", {
   successCount: integer("success_count").default(0).notNull(),
   failedCount: integer("failed_count").default(0).notNull(),
   description: text("description"),
-  
-  createdAt: timestamp("created_at").$defaultFn(() => new Date()).notNull(),
+
+  createdAt: timestamp("created_at")
+    .$defaultFn(() => new Date())
+    .notNull(),
   updateAt: timestamp("update_at")
     .$defaultFn(() => new Date())
     .notNull()

@@ -1,16 +1,12 @@
 import { db } from "@/db";
 import { unit } from "@/db/schema";
-import { and, eq, or, SQL } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type {
   UnitBase,
   UnitInsert,
-  UnitQuery,
-  UnitSelect,
 } from "./unit.schema";
-import { generateTokenJurnal, notFound, unprocessable } from "@/common/utils";
-import { env } from "bun";
-import { DrizzleWhere, ResponseService, ResProdi } from "@/types";
-import { filterColumn } from "@/common/filter-column";
+import { notFound, unprocessable } from "@/common/utils";
+import { ResponseService } from "@/types";
 
 export abstract class UnitService {
   static async getAll(tokenJurnal?: string): Promise<ResponseService> {

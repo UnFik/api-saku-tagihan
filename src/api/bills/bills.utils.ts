@@ -46,3 +46,27 @@ export async function getPicProdi(kodeProdi: string) {
   const result = await res.json();
   return result.isi[0].namaFakultas;
 }
+
+export function getJournalDescription(
+  journalId: number,
+  semester: string,
+  identityNumber: string,
+  billIssue: string
+) {
+  switch (journalId) {
+    case 1: // Tagihan UKT
+    case 45:
+      return `Tagihan UKT semester ${semester} untuk ${identityNumber} ${billIssue}`;
+    case 6: // Tagihan SPP Labschool  
+    case 52:
+      return `Tagihan SPP Labschool periode ${semester} untuk ${identityNumber} ${billIssue}`;
+    case 46: // Tagihan TTKa Ceria
+    case 53:
+      return `Tagihan TTKA Ceria periode ${semester} untuk ${identityNumber} ${billIssue}`;
+    case 47: // Tagihan Pkh, SD, PGSD, dll
+    case 54:
+      return `Tagihan Pkh, SD PGSD, dll periode ${semester} untuk ${identityNumber} ${billIssue}`;
+    default:
+      return `Tidak diketahui, id ${journalId} tidak terdaftar`;
+  }
+}

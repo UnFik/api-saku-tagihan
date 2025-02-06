@@ -26,8 +26,9 @@ import { filterColumn } from "@/common/filter-column";
 import { DrizzleWhere, ResponseService } from "@/types";
 import { BillConfirm } from "./bills.schema";
 import { env } from "bun";
-import { getPicProdi, toggleStatusConfirmed } from "./bills.utils";
+import { getJournalDescription, getPicProdi, toggleStatusConfirmed } from "./bills.utils";
 import { BillIssueService } from "../referensi/billIssues/billIssues.service";
+import { addBillConfirmJob, addBillCreateJob } from "@/common/queue";
 
 export abstract class BillService {
   static async getAll(query: BillQuery) {
@@ -541,121 +542,66 @@ export abstract class BillService {
   }
 
   static async createMany(
+    nameUploader: string,
     payload: BillInsertWithoutNumber[],
-    tokenMultibank?: String
-  ) {
+    tokenMultibank?: string
+  ): Promise<ResponseService> {
     try {
       const activationPeriod = await db.query.activationPeriods.findFirst();
       if (!activationPeriod) {
         return {
           status: 500,
           success: false,
-          message: "Terdapat masalah pada data aktivasi server",
+          message: "Terdapat masalah pada data aktivasi server, Silahkan isi data aktivasi terlebih dahulu",
         };
       }
 
-      const res = await fetch(
-        `${env.MULTIBANK_API_URL}/bill_issue/${payload[0].billIssueId}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${tokenMultibank}`,
-          },
-        }
-      );
-
-      if (res.status == 401) {
-        return {
-          status: 401,
-          success: false,
-          message: "Token Multibank tidak valid.",
-        };
-      }
-
-      const dataBillIssue = await res.json();
-
-      if (!res.ok) {
-        return {
-          success: false,
-          status: 400,
-          message: `Terdapat masalah pada Multibank, Bill Issue tidak ditemukan`,
-        };
-      }
-
-      // Validasi dan set dueDate untuk setiap tagihan UKT aktif
-      for (let bill of payload) {
-        if (
-          bill.serviceTypeId == 1 &&
-          Number(bill.semester) < Number(activationPeriod.semester)
-        ) {
-          bill.dueDate = dataBillIssue.data.end_date;
-        }
-      }
-
-      // Validasi nomor tagihan unik
-      const billNumbers = payload.map(
-        (bill) =>
-          `${bill.identityNumber}${bill.semester}${String(
-            bill.billGroupId
-          ).padStart(3, "0")}`
-      );
-
-      const existingBills = await db
-        .select()
-        .from(bills)
-        .where(inArray(bills.billNumber, billNumbers));
-
-      const existingBillNumbers = new Set(
-        existingBills.map((bill) => bill.billNumber)
-      );
-
-      // Filter payload untuk hanya memproses tagihan yang belum ada
-      const newBills = payload.filter(
-        (bill) =>
-          !existingBillNumbers.has(
-            `${bill.identityNumber}${bill.semester}${String(
-              bill.billGroupId
-            ).padStart(3, "0")}`
-          )
-      );
-
-      if (newBills.length === 0) {
-        return {
-          success: true,
-          status: 200,
-          message: "Semua tagihan sudah ada sebelumnya",
-          data: {
-            created: [],
-            skipped: existingBills.map((bill) => bill.billNumber),
-          },
-        };
-      }
-
-      // Insert batch tagihan baru
-      const data = await db
-        .insert(bills)
-        .values(
-          newBills.map((bill) => ({
-            ...bill,
-            billNumber: `${bill.identityNumber}${bill.semester}${String(
-              bill.billGroupId
-            ).padStart(3, "0")}`,
-          }))
-        )
+      // Buat record tracking
+      const [queueRecord] = await db
+        .insert(queueTracker)
+        .values({
+          createdBy: String(nameUploader),
+          totalData: payload.length,
+          status: "PROCESSING",
+          description: `Pembuatan tagihan massal sejumlah ${payload.length} data`,
+        })
         .returning();
 
+      // Bagi payload menjadi batch-batch yang lebih kecil
+      const batchSize = 100;
+      const batches = payload.length < batchSize ? [payload] : Array.from(
+        { length: Math.ceil(payload.length / batchSize) },
+        (_, i) => payload.slice(i * batchSize, (i + 1) * batchSize)
+      );
+
+      // Tambahkan setiap batch ke queue
+      for (const batch of batches) {
+        await addBillCreateJob({
+          nameUploader,
+          bills: batch,
+          tokenMultibank,
+          queueId: queueRecord.id,
+        });
+      }
+
       return {
-        data: {
-          created: data.map((bill) => bill.billNumber),
-          skipped: existingBills.map((bill) => bill.billNumber),
-        },
+        status: 200,
         success: true,
-        message: `Berhasil membuat ${data.length} tagihan, melewati ${existingBills.length} tagihan yang sudah ada`,
+        message: `Memulai proses pembuatan ${payload.length} tagihan di background`,
+        data: {
+          queueId: queueRecord.id,
+          totalData: payload.length,
+          batchCount: batches.length,
+        },
       };
     } catch (error) {
-      console.error("Error creating bills:", error);
-      throw unprocessable(error);
+      const errId = Math.random().toString(36).substring(2, 7);
+      console.error("Error queuing bill creation:", error, `ID: ${errId}`);
+      return {
+        success: false,
+        status: 500,
+        message: `Terdapat kesalahan pada server: ${errId}`,
+      };
     }
   }
 
@@ -667,7 +613,7 @@ export abstract class BillService {
     try {
       const { billNumber, amount, dueDate } = payload;
 
-      const tanggalJurnal = new Date().toISOString().split("T")[0];
+      const tanggalJurnal = new Date().toISOString();
 
       if (!tokenJurnal) {
         tokenJurnal = await generateTokenJurnal();
@@ -707,8 +653,6 @@ export abstract class BillService {
         );
       }
 
-      await toggleStatusConfirmed(billNumber);
-
       const resDataMultibank = await fetch(
         `${env.MULTIBANK_API_URL}/tagihan/${billNumber}`,
         {
@@ -722,12 +666,10 @@ export abstract class BillService {
       );
 
       if (resDataMultibank.status == 401) {
-        await toggleStatusConfirmed(billNumber);
         unauthorizedResponse("Token Multibank telah kadaluarsa");
       }
 
       if (!resDataMultibank.ok && resDataMultibank.status != 404) {
-        await toggleStatusConfirmed(billNumber);
         console.error(
           "Terdapat Kesalahan pada Get Multibank di Bills Service",
           resDataMultibank
@@ -751,6 +693,7 @@ export abstract class BillService {
               })
               .where(eq(bills.billNumber, billNumber));
 
+            console.info('Tagihan Terkonfirmasi, Data pada Multibank sudah lunas')
             return {
               success: true,
               status: 409,
@@ -779,15 +722,14 @@ export abstract class BillService {
           );
 
           if (resEditMultibank.status == 401) {
-            await toggleStatusConfirmed(billNumber);
-
+            console.error("Token Multibank telah kadaluarsa");
             return unauthorizedResponse("Token Multibank telah kadaluarsa");
           }
 
           const dataMultibank = await resEditMultibank.json();
           if (!dataMultibank.success) {
-            await toggleStatusConfirmed(billNumber);
 
+            console.error("Terdapat masalah pada Get Multibank di Bills Service", dataMultibank);
             return {
               status: dataMultibank.status,
               success: false,
@@ -805,6 +747,8 @@ export abstract class BillService {
             : undefined;
 
           if (!amountJurnal) {
+            await toggleStatusConfirmed(billNumber, true);
+            console.log("Data berhasil di konfirmasi, data besaran saku dan multibank sama")
             return {
               data: {
                 nim: bill.identityNumber,
@@ -830,8 +774,6 @@ export abstract class BillService {
               .where(eq(unit.code, bill.unitCode));
 
             if (!unitJurnal) {
-              await toggleStatusConfirmed(billNumber);
-
               console.log(`Unit ${bill.unitCode} tidak ditemukan di database`);
               return {
                 status: 400,
@@ -859,7 +801,7 @@ export abstract class BillService {
             idTransaksi: isPositive ? 1 : 45,
             noBukti: `${bill.unitCode}/${bill.semester}/${bill.identityNumber}`,
             jumlah: amountJurnal,
-            keterangan: `Tagihan UKT semester ${bill.semester} untuk ${bill.identityNumber} ${bill.billIssue}`,
+            keterangan: getJournalDescription(isPositive ? 1 : 45, String(bill.semester), bill.identityNumber, bill.billIssue),
             pic: picProdi,
             kodeUnit: kodeUnit,
           };
@@ -875,8 +817,7 @@ export abstract class BillService {
           });
 
           if (resJurnal.status == 401) {
-            await toggleStatusConfirmed(billNumber);
-
+            console.log("Token Jurnal sudah kadaluarsa");
             return unauthorizedResponse(
               "Gagal konfirmasi tagihan pada API Jurnal, Token Invalid"
             );
@@ -885,8 +826,6 @@ export abstract class BillService {
           const dataJurnal = await resJurnal.json();
 
           if (!resJurnal.ok) {
-            await toggleStatusConfirmed(billNumber);
-
             return {
               status: 400,
               success: false,
@@ -903,6 +842,7 @@ export abstract class BillService {
 
           console.info(`${billNumber} di Edit ke Multibank`);
 
+          await toggleStatusConfirmed(billNumber, true);
           return {
             data: {
               jurnalId: dataJurnal.id_jurnal,
@@ -1015,6 +955,7 @@ export abstract class BillService {
             if (resJurnal.status == 401 || !resJurnal.ok) {
               await toggleStatusConfirmed(billNumber);
 
+              console.error('Gagal konfirmasi tagihan pada API Jurnal');
               return unauthorizedResponse(
                 "Gagal konfirmasi tagihan pada API Jurnal"
               );
@@ -1322,26 +1263,17 @@ export abstract class BillService {
     try {
       const { semester, billIssueId, major, operator } = payload;
 
-      // Query dan validasi awal sama seperti sebelumnya
       const expressions: (SQL<unknown> | undefined)[] = [
-        semester
-          ? filterColumn({ column: bills.semester, value: semester })
-          : undefined,
-        billIssueId
-          ? filterColumn({
-              column: bills.billIssueId,
-              value: String(billIssueId),
-            })
-          : undefined,
+        semester ? filterColumn({ column: bills.semester, value: semester }) : undefined,
+        billIssueId ? filterColumn({ column: bills.billIssueId, value: String(billIssueId) }) : undefined,
         major ? filterColumn({ column: bills.major, value: major }) : undefined,
         eq(bills.serviceTypeId, 1),
         eq(bills.isConfirmed, false),
       ];
 
-      const where: DrizzleWhere<BillSelect> =
-        !operator || operator === "and"
-          ? and(...expressions)
-          : or(...expressions);
+      const where: DrizzleWhere<BillSelect> = !operator || operator === "and" 
+        ? and(...expressions) 
+        : or(...expressions);
 
       const unconfirmedBills = await db.select().from(bills).where(and(where));
 
@@ -1364,25 +1296,24 @@ export abstract class BillService {
           createdBy: String(nameUploader),
           totalData: unconfirmedBills.length,
           status: "PROCESSING",
-          description: `Konfirmasi tagihan massal${
-            semester ? ` semester ${semester}` : ""
-          }${major ? ` jurusan ${major}` : ""}${
-            billIssueId ? ` bill issue ${billIssueId}` : ""
-          }`,
+          description: `Konfirmasi tagihan massal${semester ? ` semester ${semester}` : ""}${
+            major ? ` jurusan ${major}` : ""
+          }${billIssueId ? ` bill issue ${billIssueId}` : ""}`,
         })
         .returning();
 
-      // Proses queue di background
-      this.processQueue(
-        unconfirmedBills,
-        queueRecord.id,
-        tokenMultibank,
-        tokenJurnal
-      ).catch((error) => {
-        console.error("Background queue processing error:", error);
-      });
+      // Tambahkan job ke queue untuk setiap tagihan
+      for (const bill of unconfirmedBills) {
+        await addBillConfirmJob({
+          billNumber: bill.billNumber,
+          amount: bill.amount,
+          dueDate: bill.dueDate ? bill.dueDate : undefined,
+          tokenMultibank,
+          tokenJurnal,
+          queueId: queueRecord.id,
+        });
+      }
 
-      // Return response segera
       return {
         status: 200,
         success: true,
@@ -1396,208 +1327,7 @@ export abstract class BillService {
     } catch (error) {
       const errId = Math.random().toString(36).substring(2, 7);
       console.error("Error confirming all bills:", error, `ID: ${errId}`);
-      return internalServerErrorResponse(
-        `Terdapat kesalahan pada server: ${errId}`
-      );
+      return internalServerErrorResponse(`Terdapat kesalahan pada server: ${errId}`);
     }
-  }
-
-  // Metode baru untuk memproses queue di background
-  private static async processQueue(
-    bills: any[],
-    queueId: number,
-    tokenMultibank?: string,
-    tokenJurnal?: string
-  ) {
-    const queue = new Queue(queueId, 5);
-    let successCount = 0;
-    let failedCount = 0;
-    const BATCH_SIZE = 50;
-
-    let successBatch = [];
-    let failedBatch = [];
-
-    for (const bill of bills) {
-      queue.add(async () => {
-        try {
-          const result = await this.confirm(
-            { billNumber: bill.billNumber },
-            tokenMultibank,
-            tokenJurnal
-          );
-
-          if (result.success) {
-            successBatch.push(bill.billNumber);
-          } else {
-            failedBatch.push(bill.billNumber);
-          }
-
-          // Update database setiap BATCH_SIZE items atau di akhir proses
-          if (successBatch.length >= BATCH_SIZE) {
-            await db
-              .update(queueTracker)
-              .set({
-                successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
-                failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`,
-              })
-              .where(eq(queueTracker.id, queueId));
-
-            successCount += successBatch.length;
-            failedCount += failedBatch.length;
-
-            successBatch = [];
-            failedBatch = [];
-          }
-        } catch (error) {
-          console.error(`Error confirming bill ${bill.billNumber}:`, error);
-          failedBatch.push(bill.billNumber);
-        }
-      });
-    }
-
-    await queue.waitComplete();
-
-    // Update sisa data yang belum di-batch
-    if (successBatch.length > 0 || failedBatch.length > 0) {
-      await db
-        .update(queueTracker)
-        .set({
-          successCount: sql`${queueTracker.successCount} + ${successBatch.length}`,
-          failedCount: sql`${queueTracker.failedCount} + ${failedBatch.length}`,
-          status: "COMPLETED",
-          updateAt: new Date(),
-        })
-        .where(eq(queueTracker.id, queueId));
-    } else {
-      // Update status final jika tidak ada sisa data
-      await db
-        .update(queueTracker)
-        .set({
-          status: "COMPLETED",
-          updateAt: new Date(),
-        })
-        .where(eq(queueTracker.id, queueId));
-    }
-  }
-}
-
-// Implementasi Queue Worker
-class Queue {
-  private concurrency: number;
-  private running: number;
-  private queue: (() => Promise<void>)[];
-  private onComplete: (() => void) | null;
-  private queueId: number;
-  private isShuttingDown = false;
-  private maxRetries = 3;
-  private maxQueueSize = 1000;
-
-  constructor(queueId: number, concurrency: number = 5) {
-    this.concurrency = concurrency;
-    this.running = 0;
-    this.queue = [];
-    this.onComplete = null;
-    this.queueId = queueId;
-  }
-
-  async add(task: () => Promise<void>) {
-    if (this.queue.length >= this.maxQueueSize) {
-      await new Promise((resolve) => {
-        const checkQueue = () => {
-          if (this.queue.length < this.maxQueueSize) {
-            resolve(true);
-          } else {
-            setTimeout(checkQueue, 100);
-          }
-        };
-        checkQueue();
-      });
-    }
-
-    const wrappedTask = async (retryCount = 0) => {
-      try {
-        await task();
-      } catch (error) {
-        if (retryCount < this.maxRetries) {
-          console.log(`Retrying task, attempt ${retryCount + 1}`);
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * (retryCount + 1))
-          );
-          return wrappedTask(retryCount + 1);
-        }
-        throw error;
-      }
-    };
-
-    this.queue.push(() => wrappedTask());
-    await this.updateQueueStatus("PROCESSING");
-    this.next();
-  }
-
-  private async updateQueueStatus(
-    status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
-  ) {
-    try {
-      await db
-        .update(queueTracker)
-        .set({
-          status: status,
-          updateAt: new Date(),
-        })
-        .where(eq(queueTracker.id, this.queueId));
-    } catch (error) {
-      console.error("Error updating queue status:", error);
-    }
-  }
-
-  private async next() {
-    if (this.isShuttingDown) {
-      return;
-    }
-    if (this.running >= this.concurrency || this.queue.length === 0) {
-      if (this.running === 0 && this.onComplete) {
-        await this.updateQueueStatus("COMPLETED");
-        this.onComplete();
-      }
-      return;
-    }
-
-    this.running++;
-    const task = this.queue.shift();
-
-    if (task) {
-      try {
-        await task();
-      } catch (error) {
-        console.error("Task error:", error);
-        await this.updateQueueStatus("FAILED");
-      }
-
-      this.running--;
-      this.next();
-    }
-  }
-
-  waitComplete(): Promise<void> {
-    if (this.running === 0 && this.queue.length === 0) {
-      return Promise.resolve();
-    }
-
-    return new Promise((resolve) => {
-      this.onComplete = resolve;
-    });
-  }
-
-  async shutdown() {
-    this.isShuttingDown = true;
-    console.log("Queue shutting down gracefully...");
-
-    // Tunggu semua task yang sedang berjalan selesai
-    while (this.running > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-
-    await this.updateQueueStatus("COMPLETED");
-    console.log("Queue shutdown complete");
   }
 }
