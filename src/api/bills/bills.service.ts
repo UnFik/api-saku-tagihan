@@ -879,14 +879,12 @@ export abstract class BillService {
           });
 
           if (resMultibank.status == 401) {
-            await toggleStatusConfirmed(billNumber);
             const new_token = await refreshTokenMultibank();
             return this.confirm({ billNumber: billNumber }, new_token);
           }
 
           const dataMultibank = await resMultibank.json();
           if (!dataMultibank.success) {
-            await toggleStatusConfirmed(billNumber);
 
             return {
               status: dataMultibank.status,
@@ -906,7 +904,6 @@ export abstract class BillService {
                 .where(eq(unit.code, bill.unitCode));
 
               if (!unitJurnal) {
-                await toggleStatusConfirmed(billNumber);
 
                 console.log(
                   `Unit ${bill.unitCode} tidak ditemukan di database`
@@ -953,8 +950,6 @@ export abstract class BillService {
             );
 
             if (resJurnal.status == 401 || !resJurnal.ok) {
-              await toggleStatusConfirmed(billNumber);
-
               console.error('Gagal konfirmasi tagihan pada API Jurnal');
               return unauthorizedResponse(
                 "Gagal konfirmasi tagihan pada API Jurnal"
@@ -964,8 +959,6 @@ export abstract class BillService {
             const data = await resJurnal.json();
 
             if (data.message != "success") {
-              await toggleStatusConfirmed(billNumber);
-
               return {
                 status: 400,
                 success: false,
@@ -980,10 +973,12 @@ export abstract class BillService {
               journalId: Number(data.id_jurnal),
             });
 
+            await toggleStatusConfirmed(billNumber, true);
+
             console.info(`${billNumber} di Tambah ke Multibank`);
             return {
               data: {
-                jurnalId: data.jurnalId,
+                jurnalId: data.id_jurnal,
                 nim: bill.identityNumber,
                 name: bill.name,
               },
