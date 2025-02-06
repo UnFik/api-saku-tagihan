@@ -537,8 +537,6 @@ export abstract class BillService {
         }
       );
 
-      console.log(jurnalResponse, tokenJurnal);
-
       if (jurnalResponse.status === 401 || !jurnalResponse.ok) {
         return unauthorizedResponse("Token Jurnal tidak valid");
       }
