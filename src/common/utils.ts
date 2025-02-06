@@ -166,4 +166,3 @@ export function unauthorizedResponse(message: string, src?: string) {
   };
 }
 
-export const generateDescriptionJurnal = async () => {};
