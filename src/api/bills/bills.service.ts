@@ -285,18 +285,23 @@ export abstract class BillService {
         payload.billGroupId
       ).padStart(3, "0")}`;
 
-      const isExist = await db
+      const [isExist] = await db
         .select()
         .from(bills)
         .where(eq(bills.billNumber, billNumber));
 
-      if (isExist.length > 0) {
+      if (isExist) {
+        const editBill = await db.update(bills).set({
+          ...payload
+        }).where(eq(bills.billNumber, billNumber));
+
         return {
-          success: false,
-          status: 400,
-          message: "Nomor tagihan sudah digunakan",
+          success: true,
+          status: 200,
+          message: `Nomor tagihan ${billNumber} sudah digunakan, Data tagihan di override`,
         };
       }
+
       const data = await db
         .insert(bills)
         .values({ ...payload, billNumber })
@@ -589,6 +594,8 @@ export abstract class BillService {
         };
       }
 
+      const [serviceType] = await db.select({ name: serviceTypes.name}).from(serviceTypes).where(eq(serviceTypes.id, payload[0].serviceTypeId))
+
       // Buat record tracking
       const [queueRecord] = await db
         .insert(queueTracker)
@@ -596,7 +603,7 @@ export abstract class BillService {
           createdBy: String(nameUploader),
           totalData: payload.length,
           status: "PROCESSING",
-          description: `Pembuatan tagihan massal sejumlah ${payload.length} data`,
+          description: `Pembuatan tagihan massal ${serviceType.name}`,
         })
         .returning();
 
@@ -1301,7 +1308,7 @@ export abstract class BillService {
     tokenJurnal?: string
   ): Promise<ResponseService> {
     try {
-      const { semester, billIssueId, major, operator } = payload;
+      const { semester, billIssueId, major, serviceTypeId, operator } = payload;
 
       const expressions: (SQL<unknown> | undefined)[] = [
         semester
@@ -1314,7 +1321,7 @@ export abstract class BillService {
             })
           : undefined,
         major ? filterColumn({ column: bills.major, value: major }) : undefined,
-        eq(bills.serviceTypeId, 1),
+        eq(bills.serviceTypeId, serviceTypeId),
         eq(bills.isConfirmed, false),
       ];
 
@@ -1334,6 +1341,8 @@ export abstract class BillService {
         };
       }
 
+      const [serviceType] = await db.select({ name: serviceTypes.name}).from(serviceTypes).where(eq(serviceTypes.id, serviceTypeId))
+
       // Buat record tracking
       const [queueRecord] = await db
         .insert(queueTracker)
@@ -1347,8 +1356,8 @@ export abstract class BillService {
           description: `Konfirmasi tagihan massal${
             semester ? ` semester ${semester}` : ""
           }${major ? ` jurusan ${major}` : ""}${
-            billIssueId ? ` bill issue ${billIssueId}` : ""
-          }`,
+            billIssueId ? ` bill issue ${billIssueId} ${serviceType.name}` : ""
+          } `,
         })
         .returning();
 

@@ -64,6 +64,7 @@ export const billConfirmAllPayload = t.Object({
   semester: t.Optional(t.String()),
   billIssueId: t.Optional(t.Number()),
   major: t.Optional(t.String()),
+  serviceTypeId: t.Number(),
   operator: t.Optional(t.Enum({ and: "and", or: "or" })),
 });
 
