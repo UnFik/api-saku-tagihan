@@ -5,7 +5,7 @@ import type {
   BillIssuePayload,
   BillIssueUpdatePayload,
 } from "./billIssues.schema";
-import { notFound, unprocessable } from "@/common/utils";
+import { notFound, unauthorizedResponse, unprocessable } from "@/common/utils";
 import { env } from "bun";
 import { refreshTokenMultibank } from "@/common/utils";
 import { ResponseService } from "@/types";
@@ -103,8 +103,9 @@ export abstract class BillIssueService {
     token?: string
   ): Promise<ResponseService> {
     if (!token) {
-      token = await refreshTokenMultibank();
+      unauthorizedResponse("Token Multibank telah kadaluarsa");
     }
+    
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_issue/${id}`, {
         method: "PUT",
@@ -139,12 +140,9 @@ export abstract class BillIssueService {
     tokenMultibank?: string
   ): Promise<ResponseService> {
     if (!tokenMultibank) {
-      tokenMultibank = await refreshTokenMultibank();
+      unauthorizedResponse("Token Multibank telah kadaluarsa");
     }
 
-    tokenMultibank = tokenMultibank
-      ? decodeURIComponent(tokenMultibank)
-      : undefined;
     try {
       const res = await fetch(`${env.MULTIBANK_API_URL}/bill_issue/${id}`, {
         method: "DELETE",
@@ -153,7 +151,6 @@ export abstract class BillIssueService {
           Authorization: `Bearer ${tokenMultibank}`,
         },
       });
-      console.log(res);
 
       if (res.status == 404) {
         return {
@@ -164,11 +161,7 @@ export abstract class BillIssueService {
       }
 
       if (res.status == 401 || !res.ok) {
-        return {
-          status: 401,
-          success: false,
-          message: "Token multibank tidak valid",
-        };
+        unauthorizedResponse("Token Multibank telah kadaluarsa");
       }
 
       const data = await res.json();
