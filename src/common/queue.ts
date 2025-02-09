@@ -41,7 +41,7 @@ export const billConfirmWorker = new Worker(
           .where(eq(queueTracker.id, queueId));
       }
 
-      console.log(`Processing bill confirmation for ${billNumber}`);
+      // console.log(`Processing bill confirmation for ${billNumber}`);
 
       const result = await BillService.confirm(
         { billNumber, amount, dueDate },
@@ -51,15 +51,19 @@ export const billConfirmWorker = new Worker(
 
       // Update counter sukses jika berhasil
       if (queueId && result.success) {
-        await db.update(queueTracker)
+        const [queueTrack] = await db.update(queueTracker)
           .set({
             successCount: sql`success_count + 1`,
             updateAt: new Date()
           })
-          .where(eq(queueTracker.id, queueId));
+          .where(eq(queueTracker.id, queueId)).returning();
+
+        if (queueTrack.totalData == (queueTrack.successCount + queueTrack.failedCount)) {
+          await updateQueueTrackerStatus(queueId, 'COMPLETED');
+        }
       }
 
-      console.log(`Confirmation result for ${billNumber}:`, result);
+      // console.log(`Confirmation result for ${billNumber}:`, result);
       return result;
     } catch (error) {
       // Update counter gagal jika terjadi error
@@ -90,11 +94,7 @@ billConfirmWorker.on("completed", async (job) => {
     // Update status di database
     await toggleStatusConfirmed(billNumber, true);
     
-    if (queueId) {
-      await updateQueueTrackerStatus(queueId, 'COMPLETED');
-    }
-    
-    console.log(`Bill confirmation ${job.id} for ${billNumber} has completed!`);
+    // console.log(`Bill confirmation ${job.id} for ${billNumber} has completed!`);
   } catch (error) {
     console.error(`Error updating completion status:`, error);
   }
@@ -104,7 +104,9 @@ billConfirmWorker.on("failed", async (job, err) => {
   try {
     if (job) {
       const { billNumber, queueId } = job.data;
-      console.log(`Bill confirmation ${job.id} for ${billNumber} has failed with ${err.message}`);
+      await toggleStatusConfirmed(billNumber, false);
+
+      console.error(`Bill confirmation ${job.id} for ${billNumber} has failed with ${err.message}`);
       
       if (queueId) {
         await updateQueueTrackerStatus(
@@ -152,73 +154,46 @@ export const billCreateWorker = new Worker(
   "bill-create",
   async (job: Job) => {
     const { nameUploader, bills, tokenMultibank, queueId } = job.data;
+    const results = { success: 0, failed: 0 };
 
     try {
-      // 1. Memproses setiap tagihan dalam batch
-      for (const bill of bills) {
+      // Proses tagihan secara parallel menggunakan Promise.all
+      await Promise.all(bills.map(async (bill: BillInsertWithoutNumber) => {
         try {
-          // 2. Mencoba membuat tagihan
           const result = await BillService.create(bill, tokenMultibank);
-          
-          // 3. Update counter sukses jika berhasil
           if (result.success) {
-            await db.update(queueTracker)
-              .set({
-                successCount: sql`success_count + 1`,
-                status: "PROCESSING",
-                updateAt: new Date()
-              })
-              .where(eq(queueTracker.id, queueId));
+            results.success++;
           } else {
-            // 4. Update counter gagal jika tidak berhasil
-            await db.update(queueTracker)
-              .set({
-                failedCount: sql`failed_count + 1`,
-                status: "PROCESSING",
-                updateAt: new Date()
-              })
-              .where(eq(queueTracker.id, queueId));
+            results.failed++;
           }
         } catch (error) {
-          // 5. Update counter gagal jika terjadi error
-          await db.update(queueTracker)
-            .set({
-              failedCount: sql`failed_count + 1`,
-              status: "PROCESSING",
-              updateAt: new Date()
-            })
-            .where(eq(queueTracker.id, queueId));
+          results.failed++;
         }
-      }
+      }));
 
-      // 6. Update status final batch
+      // Update database sekali di akhir
       await db.update(queueTracker)
         .set({
-          status: "COMPLETED",
+          successCount: sql`success_count + ${results.success}`,
+          failedCount: sql`failed_count + ${results.failed}`,
           updateAt: new Date()
         })
         .where(eq(queueTracker.id, queueId));
+
     } catch (error) {
-      // 7. Update status jika terjadi error fatal
-      await db.update(queueTracker)
-        .set({
-          status: "FAILED",
-          description: `Error: ${error}`,
-          updateAt: new Date()
-        })
-        .where(eq(queueTracker.id, queueId));
+      await updateQueueTrackerStatus(queueId, 'FAILED', `Error: ${error}`);
     }
   },
   { 
     connection,
-    concurrency: 1 
+    concurrency: 3  // Menambah concurrency untuk pemrosesan parallel
   }
 );
 
 // Perbarui handler completed dan failed
 billCreateWorker.on("completed", async (job) => {
   const { queueId } = job.data;
-  console.log(`Bill creation batch ${job.id} has completed!`);
+  // console.log(`Bill creation batch ${job.id} has completed!`);
   
   // Cek total progress
   const tracker = await db.query.queueTracker.findFirst({
@@ -226,7 +201,6 @@ billCreateWorker.on("completed", async (job) => {
   });
   
   if (tracker && (tracker.successCount + tracker.failedCount) >= tracker.totalData) {
-    console.log('completed')
     await db.update(queueTracker)
       .set({
         status: "COMPLETED",
